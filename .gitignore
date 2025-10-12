@@ -215,3 +215,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 # .commitlm-config.json
+docs/
+CLAUDE.md
+.mcp.json

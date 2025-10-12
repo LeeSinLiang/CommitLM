@@ -3,7 +3,7 @@
 import sys
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import click
 from rich.console import Console
@@ -75,9 +75,7 @@ def main(
     help="Output directory for documentation",
 )
 @click.option("--force", is_flag=True, help="Overwrite existing configuration")
-@click.pass_context
 def init(
-    ctx: click.Context,
     provider: Optional[str],
     model: Optional[str],
     output_dir: str,
@@ -110,6 +108,9 @@ def init(
             type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
             default="huggingface",
         )
+
+    # At this point, provider is guaranteed to be a string
+    assert provider is not None, "Provider must be set"
 
     config_data = {"provider": provider, "documentation": {"output_dir": output_dir}}
 
@@ -167,9 +168,9 @@ def _init_api_provider(config_data: dict, provider: str, model: Optional[str]):
     
     if not model:
         default_models = {
-            "gemini": "gemini-1.5-flash",
-            "anthropic": "claude-3-haiku-20240307",
-            "openai": "gpt-4o",
+            "gemini": "gemini-2.5-flash",
+            "anthropic": "claude-3-5-haiku-latest",
+            "openai": "gpt-5-mini-2025-08-07",
         }
         model = click.prompt(f"Enter {provider.capitalize()} model", default=default_models.get(provider, ""))
         
@@ -375,8 +376,7 @@ def generate(
 
 
 @main.group()
-@click.pass_context
-def config(ctx: click.Context):
+def config():
     """Manage configuration settings."""
     pass
 
@@ -416,21 +416,22 @@ def config_set(ctx: click.Context, key: str, value: str):
         s = getattr(s, k)
 
     # Try to convert value to the correct type
+    converted_value: Union[str, bool, int, float] = value
     try:
         current_value = getattr(s, keys[-1])
         if isinstance(current_value, bool):
-            value = value.lower() in ["true", "1", "yes"]
+            converted_value = value.lower() in ["true", "1", "yes"]
         elif isinstance(current_value, int):
-            value = int(value)
+            converted_value = int(value)
         elif isinstance(current_value, float):
-            value = float(value)
+            converted_value = float(value)
     except Exception:
         pass # Keep as string if conversion fails
 
-    setattr(s, keys[-1], value)
+    setattr(s, keys[-1], converted_value)
 
     settings.save_to_file(ctx.obj["config_path"])
-    console.print(f"[green]Set '{key}' to '{value}'[/green]")
+    console.print(f"[green]Set '{key}' to '{converted_value}'[/green]")
 
 
 @main.command()
@@ -439,11 +440,9 @@ def config_set(ctx: click.Context, key: str, value: str):
 def install_hook(ctx: click.Context, force: bool):
     """Install git post-commit hook for automatic documentation generation."""
     from ..integrations.git_client import get_git_client, GitClientError
-    from ..utils.helpers import is_git_repository
+    from ..utils.helpers import get_git_root
 
     console.print("[bold blue]🔗 Installing Git Post-Commit Hook[/bold blue]")
-
-    from ..utils.helpers import get_git_root
     git_root = get_git_root()
     
     if not git_root:
@@ -538,7 +537,7 @@ def install_hook(ctx: click.Context, force: bool):
 @click.pass_context
 def uninstall_hook(ctx: click.Context):
     """Uninstall git post-commit hook."""
-    from ..utils.helpers import is_git_repository, get_git_root
+    from ..utils.helpers import get_git_root
 
     console.print("[bold blue]🗑️ Uninstalling Git Post-Commit Hook[/bold blue]")
 

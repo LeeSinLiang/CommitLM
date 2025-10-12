@@ -2,8 +2,11 @@
 
 import os
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING, cast
 import logging
+
+if TYPE_CHECKING:
+    from git import Repo as RepoType
 
 try:
     import git
@@ -57,11 +60,11 @@ class GitClient:
             raise GitClientError(f"Failed to initialize git repository: {e}")
     
     @property
-    def repo(self) -> Repo:
+    def repo(self) -> "RepoType":
         """Get the git repository object."""
         if self._repo is None:
             self._setup_repo()
-        return self._repo
+        return cast("RepoType", self._repo)
     
     def get_last_commit_diff(self, ignore_patterns: Optional[List[str]] = None) -> str:
         """Get the diff for the last commit.
@@ -260,18 +263,15 @@ class GitClient:
             return False
     
     def create_post_commit_hook_script(self, output_path: Path) -> bool:
-        """Create a post-commit hook script that calls ai-docs.
-        
+        """Create a post-commit hook script that calls CommitLM.
+
         Args:
             output_path: Where to save the hook script
-            
+
         Returns:
             True if script created successfully
         """
         try:
-            import sys
-            python_exec = sys.executable
-            
             hook_content = """#!/bin/bash
 # CommitLM Post-Commit Hook
 # This script automatically generates documentation after each commit
