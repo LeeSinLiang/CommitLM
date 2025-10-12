@@ -62,6 +62,7 @@ def main(
 
 
 @main.command()
+@click.pass_context
 @click.option(
     "--provider",
     type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
@@ -76,6 +77,7 @@ def main(
 )
 @click.option("--force", is_flag=True, help="Overwrite existing configuration")
 def init(
+    ctx: click.Context,
     provider: Optional[str],
     model: Optional[str],
     output_dir: str,
