@@ -1,0 +1,2 @@
+[console_scripts]
+commitlm = commitlm.cli.commands:main
