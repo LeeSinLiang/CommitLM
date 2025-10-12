@@ -18,7 +18,7 @@ AI-powered documentation generator that automatically creates comprehensive docu
 
 ```bash
 git clone <repository-url>
-cd ai-doc
+cd commitlm
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e .
@@ -28,15 +28,15 @@ pip install -e .
 
 ```bash
 # Interactive setup (recommended) - guides you through model selection, YaRN, and token limits
-ai-docs init
+commitlm init
 
 # Non-interactive setup with specific options
-ai-docs init --model qwen2.5-coder-1.5b --max-tokens 1024 --enable-yarn
+commitlm init --model qwen2.5-coder-1.5b --max-tokens 1024 --enable-yarn
 ```
 
 #### Interactive Setup Flow
 
-When you run `ai-docs init`, you'll be guided through:
+When you run `commitlm init`, you'll be guided through:
 
 1. **Model Selection**: Choose from available models with recommendations
 2. **YaRN Configuration** (Qwen models only): Enable extended context for large diffs
@@ -44,7 +44,7 @@ When you run `ai-docs init`, you'll be guided through:
 
 Example interactive session:
 ```
-🚀 Initializing AI Docs Generator
+🚀 Initializing CommitLM
 
 Available Local Models:
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -76,7 +76,7 @@ Max output tokens [1024]: 1024
 
 ```bash
 # Enable automatic documentation generation on every commit
-ai-docs install-hook
+commitlm install-hook
 ```
 
 After installing the git hook, every time you run `git commit`, AI will automatically:
@@ -99,7 +99,7 @@ git commit -m "feat: add user authentication system"
 
 ```bash
 # View configuration and hardware info
-ai-docs status
+commitlm status
 ```
 
 ## System Requirements
@@ -132,13 +132,13 @@ Memory optimization is **enabled by default** and includes:
 
 Disable for better quality (requires more RAM):
 ```bash
-ai-docs init --no-memory-optimization
+commitlm init --no-memory-optimization
 ```
 
 ## Usage Examples
 
 ### Normal Workflow (Automatic)
-After running `ai-docs install-hook`, documentation is generated automatically:
+After running `commitlm install-hook`, documentation is generated automatically:
 
 ```bash
 # Make changes to your code
@@ -158,7 +158,7 @@ The `generate` command is for testing and debugging purposes, not everyday use:
 
 ```bash
 # Test the AI model with sample diff (for debugging)
-ai-docs generate "fix: resolve memory leak in user session handler
+commitlm generate "fix: resolve memory leak in user session handler
 
 - Fixed session cleanup on logout
 - Added proper event listener removal  
@@ -168,16 +168,16 @@ ai-docs generate "fix: resolve memory leak in user session handler
 ### Model Selection During Init
 ```bash
 # For systems with limited RAM (3-4GB)
-ai-docs init --model tinyllama
+commitlm init --model tinyllama
 
 # For systems with good specs (8GB+ RAM) - long context support
-ai-docs init --model phi-3-mini-128k --no-memory-optimization
+commitlm init --model phi-3-mini-128k --no-memory-optimization
 
 # For code-focused tasks (recommended)
-ai-docs init --model qwen2.5-coder-1.5b
+commitlm init --model qwen2.5-coder-1.5b
 
 # Enable YaRN for extended context (Qwen models only)
-ai-docs init --model qwen2.5-coder-1.5b --enable-yarn
+commitlm init --model qwen2.5-coder-1.5b --enable-yarn
 ```
 
 ### YaRN Extended Context (Qwen Models)
@@ -186,16 +186,16 @@ YaRN (Yet another RoPE extensioN) enables extended context lengths for better ha
 
 ```bash
 # Enable YaRN with default settings
-ai-docs init --model qwen2.5-coder-1.5b --enable-yarn
+commitlm init --model qwen2.5-coder-1.5b --enable-yarn
 
 # YaRN with memory optimization (64K context)
-ai-docs init --model qwen2.5-coder-1.5b --enable-yarn --memory-optimization
+commitlm init --model qwen2.5-coder-1.5b --enable-yarn --memory-optimization
 
 # YaRN with full performance (131K context)  
-ai-docs init --model qwen2.5-coder-1.5b --enable-yarn --no-memory-optimization
+commitlm init --model qwen2.5-coder-1.5b --enable-yarn --no-memory-optimization
 
 # Override YaRN for specific generation
-ai-docs generate "large diff content" --enable-yarn
+commitlm generate "large diff content" --enable-yarn
 ```
 
 **YaRN Benefits:**
@@ -206,13 +206,13 @@ ai-docs generate "large diff content" --enable-yarn
 ### Custom Token Limits
 ```bash
 # Set custom max tokens (default varies by model)
-ai-docs init --max-tokens 512   # Shorter, focused docs
-ai-docs init --max-tokens 2048  # Longer, detailed docs
+commitlm init --max-tokens 512   # Shorter, focused docs
+commitlm init --max-tokens 2048  # Longer, detailed docs
 ```
 
 ## Configuration
 
-Configuration is stored in `.ai-docs-config.json`:
+Configuration is stored in `.commitlm-config.json`:
 
 ```json
 {
@@ -233,23 +233,23 @@ Configuration is stored in `.ai-docs-config.json`:
 ## Commands
 
 ```bash
-ai-docs init            # Initialize configuration (Step 2)
-ai-docs install-hook    # Install git post-commit hook (Step 3 - Main feature)
-ai-docs status          # Show current config and hardware info  
-ai-docs validate        # Test model connection
-ai-docs generate TEXT   # Manual generation (debug/testing only)
-ai-docs uninstall-hook  # Remove git post-commit hook
-ai-docs --help          # Show all commands
+commitlm init            # Initialize configuration (Step 2)
+commitlm install-hook    # Install git post-commit hook (Step 3 - Main feature)
+commitlm status          # Show current config and hardware info
+commitlm validate        # Test model connection
+commitlm generate TEXT   # Manual generation (debug/testing only)
+commitlm uninstall-hook  # Remove git post-commit hook
+commitlm --help          # Show all commands
 ```
 
 **Primary Commands:**
-- `ai-docs init` → Set up your AI model and configuration
-- `ai-docs install-hook` → **Enable automatic documentation** (this is what you want!)
-- `ai-docs status` → Check everything is working
+- `commitlm init` → Set up your AI model and configuration
+- `commitlm install-hook` → **Enable automatic documentation** (this is what you want!)
+- `commitlm status` → Check everything is working
 
 **Debug Commands:**
-- `ai-docs generate` → Test documentation generation manually
-- `ai-docs validate` → Test AI model is loading correctly
+- `commitlm generate` → Test documentation generation manually
+- `commitlm validate` → Test AI model is loading correctly
 
 ## Troubleshooting
 
@@ -259,26 +259,26 @@ Models are downloaded automatically on first use to `~/.cache/huggingface/`. Ens
 ### Memory Errors  
 ```bash
 # Enable memory optimization (default)
-ai-docs init --memory-optimization
+commitlm init --memory-optimization
 
 # Try a smaller model
-ai-docs init --model tinyllama
+commitlm init --model tinyllama
 ```
 
 ### Performance Issues
 ```bash
 # Disable memory optimization for better quality
-ai-docs init --no-memory-optimization
+commitlm init --no-memory-optimization
 
 # Use GPU if available (auto-detected by default)
-ai-docs status  # Check if GPU is detected
+commitlm status  # Check if GPU is detected
 ```
 
 ### CUDA/GPU Issues
 ```bash
 # Check GPU detection
-ai-docs status
+commitlm status
 
 # Force CPU usage if GPU causes issues  
-# Edit .ai-docs-config.json and set "device": "cpu"
+# Edit .commitlm-config.json and set "device": "cpu"
 ```

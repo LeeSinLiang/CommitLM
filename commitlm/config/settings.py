@@ -313,7 +313,7 @@ class Settings(BaseModel):
     debug: bool = Field(default=False, description="Enable debug mode")
     verbose: bool = Field(default=False, description="Enable verbose output")
     config_file: Path = Field(
-        default=Path(".ai-docs-config.json"), description="Configuration file path"
+        default=Path(".commitlm-config.json"), description="Configuration file path"
     )
 
     @field_validator("model")

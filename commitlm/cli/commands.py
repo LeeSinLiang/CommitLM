@@ -29,7 +29,7 @@ def main(
     if version:
         from .. import __version__
 
-        console.print(f"ai-docs-generator v{__version__}")
+        console.print(f"CommitLM v{__version__}")
         sys.exit(0)
 
     ctx.ensure_object(dict)
@@ -41,7 +41,7 @@ def main(
         config_path = Path(config)
     else:
         git_root = get_git_root()
-        config_path = (git_root / ".ai-docs-config.json") if git_root else None
+        config_path = (git_root / ".commitlm-config.json") if git_root else None
     
     ctx.obj["config_path"] = config_path
     ctx.obj["verbose"] = verbose
@@ -105,19 +105,19 @@ def init(
     enable_yarn: bool,
     force: bool,
 ):
-    """Initialize AI docs configuration."""
-    console.print("[bold blue]🚀 Initializing AI Docs Generator[/bold blue]")
+    """Initialize CommitLM configuration."""
+    console.print("[bold blue]🚀 Initializing CommitLM[/bold blue]")
     
     # Auto-detect git repository root and save config there
     from ..utils.helpers import get_git_root
     git_root = get_git_root()
     
     if git_root:
-        config_path = git_root / ".ai-docs-config.json"
+        config_path = git_root / ".commitlm-config.json"
         console.print(f"[blue]📁 Detected git repository at: {git_root}[/blue]")
         console.print(f"[blue]💾 Configuration will be saved to: {config_path}[/blue]")
     else:
-        config_path = Path(".ai-docs-config.json")
+        config_path = Path(".commitlm-config.json")
         console.print("[yellow]⚠️  No git repository detected. Saving config in current directory.[/yellow]")
         console.print("[yellow]   Note: You'll need to run this from your git repository root for git hooks to work.[/yellow]")
 
@@ -304,9 +304,9 @@ def init(
         console.print(f"\n[green]✅ Configuration saved to {config_path}[/green]")
 
         console.print("\n[bold]Next Steps:[/bold]")
-        console.print("• Run 'ai-docs validate' to test the model connection")
+        console.print("• Run 'commitlm validate' to test the model connection")
         console.print(
-            "• Run 'ai-docs install-hook' to enable automatic documentation generation"
+            "• Run 'commitlm install-hook' to enable automatic documentation generation"
         )
         console.print(
             "• The first time you use a model, it will be downloaded automatically"
@@ -359,7 +359,7 @@ def validate(ctx: click.Context):
         client = create_llm_client(settings)
 
         # Simple test
-        test_response = client.generate_text("Say 'Hello from AI docs!'", max_tokens=50)
+        test_response = client.generate_text("Say 'Hello from CommitLM!'", max_tokens=50)
 
         if test_response:
             validation_table.add_row(
@@ -414,7 +414,7 @@ def status(ctx: click.Context):
     """Show current status and configuration."""
     settings = ctx.obj["settings"]
 
-    console.print("[bold blue]📊 AI Docs Generator Status[/bold blue]")
+    console.print("[bold blue]📊 CommitLM Status[/bold blue]")
 
     # Model status
     available_models = get_available_models()
@@ -459,12 +459,12 @@ def status(ctx: click.Context):
     status_table.add_row("Memory Optimization", "⚙️", memory_opt)
 
     # Configuration file
-    config_file = Path(".ai-docs-config.json")
+    config_file = Path(".commitlm-config.json")
     if config_file.exists():
         status_table.add_row("Configuration", "✅", str(config_file))
     else:
         status_table.add_row(
-            "Configuration", "❌", "No config file found (run 'ai-docs init')"
+            "Configuration", "❌", "No config file found (run 'commitlm init')"
         )
 
     console.print(status_table)
@@ -614,11 +614,11 @@ def install_hook(ctx: click.Context, force: bool):
 
     console.print(f"[blue]📁 Git repository detected at: {git_root}[/blue]")
     
-    config_path = git_root / ".ai-docs-config.json"
+    config_path = git_root / ".commitlm-config.json"
     if not config_path.exists():
-        console.print(f"[red]No AI docs configuration found at: {config_path}[/red]")
-        console.print("Please run 'ai-docs init' first to set up configuration.")
-        console.print("[blue]💡 Tip: Run 'ai-docs init' and it will automatically save the config in the right place![/blue]")
+        console.print(f"[red]No CommitLM configuration found at: {config_path}[/red]")
+        console.print("Please run 'commitlm init' first to set up configuration.")
+        console.print("[blue]💡 Tip: Run 'commitlm init' and it will automatically save the config in the right place![/blue]")
         sys.exit(1)
     
     console.print(f"[green]✓ Configuration found at: {config_path}[/green]")
@@ -722,9 +722,9 @@ def uninstall_hook(ctx: click.Context):
         with open(hook_file, "r") as f:
             content = f.read()
 
-        if "AI Docs Generator Post-Commit Hook" not in content:
+        if "CommitLM Generator Post-Commit Hook" not in content:
             console.print(
-                "[yellow]⚠️  Existing post-commit hook doesn't appear to be from AI Docs[/yellow]"
+                "[yellow]⚠️  Existing post-commit hook doesn't appear to be from CommitLM[/yellow]"
             )
             if not click.confirm("Remove it anyway?"):
                 console.print("[yellow]Uninstall cancelled.[/yellow]")
