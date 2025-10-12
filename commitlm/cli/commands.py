@@ -524,45 +524,48 @@ def _install_post_commit_hook(force: bool):
 @main.command()
 @click.pass_context
 def uninstall_hook(ctx: click.Context):
-    """Uninstall git post-commit hook."""
+    """Uninstall git hooks."""
     from ..utils.helpers import get_git_root
 
-    console.print("[bold blue]🗑️ Uninstalling Git Post-Commit Hook[/bold blue]")
+    console.print("[bold blue]🗑️ Uninstalling Git Hooks[/bold blue]")
 
-    # Check if we're in a git repository
     git_root = get_git_root()
     if not git_root:
         console.print("[red]❌ Not in a git repository![/red]")
         sys.exit(1)
-    
+
     console.print(f"[blue]📁 Git repository detected at: {git_root}[/blue]")
 
+    _uninstall_hook_file("post-commit", "CommitLM Generator Post-Commit Hook", git_root, ctx.obj.get("debug", False))
+    _uninstall_hook_file("prepare-commit-msg", "CommitLM-prepare-commit-msg", git_root, ctx.obj.get("debug", False))
+
+
+def _uninstall_hook_file(hook_name: str, signature: str, git_root: Path, debug: bool):
+    """Helper function to uninstall a single git hook."""
     try:
-        hook_file = git_root / ".git" / "hooks" / "post-commit"
+        hook_file = git_root / ".git" / "hooks" / hook_name
 
         if not hook_file.exists():
-            console.print("[yellow]⚠️  No post-commit hook found[/yellow]")
+            console.print(f"[yellow]⚠️  No {hook_name} hook found[/yellow]")
             return
 
-        # Check if it's our hook (look for AI Docs signature)
         with open(hook_file, "r") as f:
             content = f.read()
 
-        if "CommitLM Generator Post-Commit Hook" not in content:
+        if signature not in content:
             console.print(
-                "[yellow]⚠️  Existing post-commit hook doesn't appear to be from CommitLM[/yellow]"
+                f"[yellow]⚠️  Existing {hook_name} hook doesn't appear to be from CommitLM[/yellow]"
             )
             if not click.confirm("Remove it anyway?"):
-                console.print("[yellow]Uninstall cancelled.[/yellow]")
+                console.print(f"[yellow]Uninstall of {hook_name} cancelled.[/yellow]")
                 return
 
-        # Remove the hook
         hook_file.unlink()
-        console.print("[green]✅ Post-commit hook removed successfully![/green]")
+        console.print(f"[green]✅ {hook_name} hook removed successfully![/green]")
 
     except Exception as e:
-        console.print(f"[red]❌ Failed to uninstall hook: {e}[/red]")
-        if ctx.obj["debug"]:
+        console.print(f"[red]❌ Failed to uninstall {hook_name} hook: {e}[/red]")
+        if debug:
             console.print_exception()
         sys.exit(1)
 
