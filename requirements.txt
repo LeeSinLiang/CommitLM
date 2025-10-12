@@ -1,0 +1,30 @@
+# Core Git and GitHub integration
+gitpython
+pygithub
+
+# HuggingFace local models
+transformers>=4.35.0
+torch>=2.0.0
+accelerate
+optimum
+bitsandbytes  # For 8-bit quantization on GPU
+
+# CLI and UI
+click>=8.0
+rich
+
+# Configuration and validation
+pydantic>=2.0
+python-dotenv
+
+# Templates
+jinja2
+
+# Development dependencies
+pytest
+pytest-cov
+black
+ruff
+
+# Optional: File watching for future features
+watchdog
