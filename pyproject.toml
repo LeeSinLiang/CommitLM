@@ -20,7 +20,10 @@ dependencies = [
     "jinja2",
     "rich",
     "python-dotenv",
-    "watchdog"
+    "watchdog",
+    "google-generativeai",
+    "anthropic",
+    "openai"
 ]
 
 [project.scripts]

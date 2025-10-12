@@ -16,3 +16,6 @@ Requires-Dist: jinja2
 Requires-Dist: rich
 Requires-Dist: python-dotenv
 Requires-Dist: watchdog
+Requires-Dist: google-generativeai
+Requires-Dist: anthropic
+Requires-Dist: openai
