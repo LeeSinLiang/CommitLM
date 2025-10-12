@@ -2,8 +2,11 @@
 
 import os
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING, cast
 import logging
+
+if TYPE_CHECKING:
+    from git import Repo as RepoType
 
 try:
     import git
@@ -57,11 +60,11 @@ class GitClient:
             raise GitClientError(f"Failed to initialize git repository: {e}")
     
     @property
-    def repo(self) -> Repo:
+    def repo(self) -> "RepoType":
         """Get the git repository object."""
         if self._repo is None:
             self._setup_repo()
-        return self._repo
+        return cast("RepoType", self._repo)
     
     def get_last_commit_diff(self, ignore_patterns: Optional[List[str]] = None) -> str:
         """Get the diff for the last commit.
@@ -260,20 +263,17 @@ class GitClient:
             return False
     
     def create_post_commit_hook_script(self, output_path: Path) -> bool:
-        """Create a post-commit hook script that calls ai-docs.
-        
+        """Create a post-commit hook script that calls CommitLM.
+
         Args:
             output_path: Where to save the hook script
-            
+
         Returns:
             True if script created successfully
         """
         try:
-            import sys
-            python_exec = sys.executable
-            
             hook_content = """#!/bin/bash
-# AI Docs Generator Post-Commit Hook
+# CommitLM Post-Commit Hook
 # This script automatically generates documentation after each commit
 
 # Exit on any error
@@ -283,14 +283,14 @@ set -e
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-# Check if ai-docs is configured
-if [ ! -f ".ai-docs-config.json" ]; then
-    echo "AI Docs: No configuration found, skipping documentation generation"
+# Check if CommitLM is configured
+if [ ! -f ".commitlm-config.json" ]; then
+    echo "CommitLM: No configuration found, skipping documentation generation"
     exit 0
 fi
 
 # Generate documentation from the last commit
-echo "AI Docs: Generating documentation for latest commit..."
+echo "CommitLM: Generating documentation for latest commit..."
 
 # Get the commit hash
 COMMIT_HASH="$(git rev-parse HEAD)"
@@ -302,7 +302,7 @@ DIFF_OUTPUT="$(git show --no-merges --format="" $COMMIT_HASH)"
 
 # Skip if no changes (merge commits, etc.)
 if [ -z "$DIFF_OUTPUT" ]; then
-    echo "AI Docs: No changes to document, skipping"
+    echo "CommitLM: No changes to document, skipping"
     exit 0
 fi
 
@@ -313,24 +313,26 @@ mkdir -p docs
 TIMESTAMP="$(date +"%Y%m%d_%H%M%S")"
 DOC_FILENAME="docs/commit_${COMMIT_SHORT}_${TIMESTAMP}.md"
 
-# Use ai-docs global command
-ai-docs generate \\
+# Use commitlm global command
+commitlm generate \\
     --output "$DOC_FILENAME" \\
     "$DIFF_OUTPUT" \\
     2>/dev/null || {
-    echo "AI Docs: Failed to generate documentation"
+    echo "CommitLM: Failed to generate documentation"
     exit 1
 }
 
 # Add metadata header to the generated file
+GENERATED_DATE="$(date)"
+REPO_NAME="$(basename "$REPO_ROOT")"
 TEMP_FILE="${DOC_FILENAME}.tmp"
 cat > "$TEMP_FILE" << EOF
 # Documentation for Commit $COMMIT_SHORT
 
-**Commit Hash:** `$COMMIT_HASH`  
-**Commit Message:** $COMMIT_MSG  
-**Generated:** $(date)  
-**Repository:** $(basename "$REPO_ROOT")
+**Commit Hash:** $COMMIT_HASH
+**Commit Message:** $COMMIT_MSG
+**Generated:** $GENERATED_DATE
+**Repository:** $REPO_NAME
 
 ---
 
@@ -340,7 +342,7 @@ EOF
 cat "$DOC_FILENAME" >> "$TEMP_FILE"
 mv "$TEMP_FILE" "$DOC_FILENAME"
 
-echo "AI Docs: Documentation generated at $DOC_FILENAME"
+echo "CommitLM: Documentation generated at $DOC_FILENAME"
 """
 
             # Write the hook script

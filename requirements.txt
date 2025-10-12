@@ -20,6 +20,11 @@ python-dotenv
 # Templates
 jinja2
 
+# LLM Providers
+google-genai
+anthropic
+openai
+
 # Development dependencies
 pytest
 pytest-cov

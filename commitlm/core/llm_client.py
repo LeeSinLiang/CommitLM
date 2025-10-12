@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 import logging
+import os
 
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
@@ -16,8 +17,21 @@ except ImportError:
     pipeline = None
     torch = None
 
-from ..config.settings import Settings, HuggingFaceConfig, CPU_MODEL_CONFIGS
+from google import genai
+from google.genai import types
+import anthropic
+import openai
+
+from ..config.settings import (
+    Settings,
+    HuggingFaceConfig,
+    GeminiConfig,
+    AnthropicConfig,
+    OpenAIConfig,
+    CPU_MODEL_CONFIGS,
+)
 from ..config.prompts import render_documentation_prompt
+from typing import Union
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +45,10 @@ class LLMClientError(Exception):
 class LLMClient(ABC):
     """Abstract base class for LLM clients."""
 
-    def __init__(self, config: HuggingFaceConfig):
+    def __init__(
+        self,
+        config: Union[HuggingFaceConfig, GeminiConfig, AnthropicConfig, OpenAIConfig],
+    ):
         self.config = config
         self._client = None
         self._setup_client()
@@ -461,13 +478,205 @@ Keep it concise and clear."""
         return f"huggingface-{self.model_key}"
 
 
+class GeminiClient(LLMClient):
+    """Client for Google Gemini API."""
+
+    def _setup_client(self) -> None:
+        """Setup Gemini client."""
+        api_key = self.config.api_key or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise LLMClientError(
+                "GEMINI_API_KEY not found in config file or environment variables."
+            )
+        self._client = genai.Client(api_key=api_key)
+        self.model = self.config.model
+
+    def generate_text(self, prompt: str, **kwargs) -> str:
+        """Generate text using Gemini API."""
+        try:
+            # Workaround for Gemini 2.5 models: max_output_tokens can cause empty responses
+            # Only use temperature for now
+            generation_config = types.GenerateContentConfig(
+                temperature=self.config.temperature,
+            )
+            response = self._client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=generation_config
+            )
+            # Handle potential None response
+            if response.text is None:
+                logger.warning("Gemini returned None response, trying to access candidates")
+                if response.candidates and len(response.candidates) > 0:
+                    candidate = response.candidates[0]
+                    if candidate.content and candidate.content.parts:
+                        return candidate.content.parts[0].text or self._generate_fallback()
+                logger.error(f"Empty response from Gemini. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'Unknown'}")
+                return self._generate_fallback()
+            return response.text
+        except Exception as e:
+            logger.error(f"Gemini API call failed: {e}")
+            return self._generate_fallback()
+
+    def generate_documentation(
+        self, diff_content: str, file_context: str = "", **kwargs
+    ) -> str:
+        """Generate documentation from git diff using Gemini API."""
+        prompt = render_documentation_prompt(
+            diff_content=diff_content,
+            file_context=file_context,
+            template_name="documentation_generation",
+            max_tokens=self.config.max_tokens,
+        )
+        return self.generate_text(prompt, **kwargs)
+
+    def _generate_fallback(self) -> str:
+        """Simple fallback documentation."""
+        return """# Code Changes
+
+## Summary
+Code modifications detected in this commit.
+
+## Details
+This commit contains updates to the codebase. Please review the changes manually for detailed documentation.
+
+## Note
+Documentation generation via Gemini failed. Please check your API key and model configuration."""
+
+    @property
+    def provider_name(self) -> str:
+        return "gemini"
+
+
+class AnthropicClient(LLMClient):
+    """Client for Anthropic Claude API."""
+
+    def _setup_client(self) -> None:
+        """Setup Anthropic client."""
+        api_key = self.config.api_key or os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise LLMClientError(
+                "ANTHROPIC_API_KEY not found in config file or environment variables."
+            )
+        self._client = anthropic.Anthropic(api_key=api_key)
+
+    def generate_text(self, prompt: str, **kwargs) -> str:
+        """Generate text using Anthropic API."""
+        try:
+            message = self._client.messages.create(
+                model=self.config.model,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return message.content[0].text
+        except Exception as e:
+            logger.error(f"Anthropic API call failed: {e}")
+            return self._generate_fallback()
+
+    def generate_documentation(
+        self, diff_content: str, file_context: str = "", **kwargs
+    ) -> str:
+        """Generate documentation from git diff using Anthropic API."""
+        prompt = render_documentation_prompt(
+            diff_content=diff_content,
+            file_context=file_context,
+            template_name="documentation_generation",
+            max_tokens=self.config.max_tokens,
+        )
+        return self.generate_text(prompt, **kwargs)
+
+    def _generate_fallback(self) -> str:
+        """Simple fallback documentation."""
+        return """# Code Changes
+
+## Summary
+Code modifications detected in this commit.
+
+## Details
+This commit contains updates to the codebase. Please review the changes manually for detailed documentation.
+
+## Note
+Documentation generation via Anthropic failed. Please check your API key and model configuration."""
+
+    @property
+    def provider_name(self) -> str:
+        return "anthropic"
+
+
+class OpenAIClient(LLMClient):
+    """Client for OpenAI API."""
+
+    def _setup_client(self) -> None:
+        """Setup OpenAI client."""
+        api_key = self.config.api_key or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise LLMClientError(
+                "OPENAI_API_KEY not found in config file or environment variables."
+            )
+        self._client = openai.OpenAI(api_key=api_key)
+
+    def generate_text(self, prompt: str, **kwargs) -> str:
+        """Generate text using OpenAI API."""
+        try:
+            response = self._client.chat.completions.create(
+                model=self.config.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature,
+            )
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            logger.error(f"OpenAI API call failed: {e}")
+            return self._generate_fallback()
+
+    def generate_documentation(
+        self, diff_content: str, file_context: str = "", **kwargs
+    ) -> str:
+        """Generate documentation from git diff using OpenAI API."""
+        prompt = render_documentation_prompt(
+            diff_content=diff_content,
+            file_context=file_context,
+            template_name="documentation_generation",
+            max_tokens=self.config.max_tokens,
+        )
+        return self.generate_text(prompt, **kwargs)
+
+    def _generate_fallback(self) -> str:
+        """Simple fallback documentation."""
+        return """# Code Changes
+
+## Summary
+Code modifications detected in this commit.
+
+## Details
+This commit contains updates to the codebase. Please review the changes manually for detailed documentation.
+
+## Note
+Documentation generation via OpenAI failed. Please check your API key and model configuration."""
+
+    @property
+    def provider_name(self) -> str:
+        return "openai"
+
+
 class LLMClientFactory:
     """Factory for creating LLM clients."""
 
     @staticmethod
     def create_client(settings: Settings) -> LLMClient:
         """Create an LLM client based on the settings."""
-        return HuggingFaceClient(settings.huggingface)
+        provider = settings.provider
+        if provider == "huggingface":
+            return HuggingFaceClient(settings.huggingface)
+        elif provider == "gemini":
+            return GeminiClient(settings.gemini)
+        elif provider == "anthropic":
+            return AnthropicClient(settings.anthropic)
+        elif provider == "openai":
+            return OpenAIClient(settings.openai)
+        else:
+            raise LLMClientError(f"Unsupported LLM provider: {provider}")
 
     @staticmethod
     def get_available_models() -> List[str]:

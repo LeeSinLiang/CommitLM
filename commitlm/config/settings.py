@@ -3,8 +3,8 @@
 import os
 import json
 from pathlib import Path
-from typing import Optional, Literal, Any, Dict
-from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Literal, Any, Dict, Union, cast
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,6 +12,7 @@ load_dotenv()
 HuggingFaceModel = Literal[
     "phi-3-mini-128k", "tinyllama", "qwen2.5-coder-1.5b"
 ]
+LLMProvider = Literal["huggingface", "gemini", "anthropic", "openai"]
 
 CPU_MODEL_CONFIGS = {
     "qwen2.5-coder-1.5b": {
@@ -94,7 +95,7 @@ class HuggingFaceConfig(BaseModel):
     temperature: float = Field(
         default=0.3, ge=0.0, le=2.0, description="Sampling temperature"
     )
-    cache_dir: Optional[str] = Field(None, description="Custom model cache directory")
+    cache_dir: Optional[str] = Field(default=None, description="Custom model cache directory")
     device: str = Field(
         default="auto",
         description="Device to run model on ('auto', 'cpu', 'cuda', 'mps')",
@@ -245,6 +246,35 @@ class HuggingFaceConfig(BaseModel):
         }
 
 
+class GeminiConfig(BaseModel):
+    """Google Gemini API configuration."""
+
+    model: str = Field(default="gemini-2.5-flash", description="Gemini model to use")
+    api_key: Optional[str] = Field(default=None, description="Gemini API key")
+    max_tokens: int = Field(default=1024, description="Maximum tokens for response")
+    temperature: float = Field(default=0.4, description="Sampling temperature")
+
+
+class AnthropicConfig(BaseModel):
+    """Anthropic Claude API configuration."""
+
+    model: str = Field(
+        default="claude-3-5-haiku-latest", description="Anthropic model to use"
+    )
+    api_key: Optional[str] = Field(default=None, description="Anthropic API key")
+    max_tokens: int = Field(default=1024, description="Maximum tokens for response")
+    temperature: float = Field(default=0.4, description="Sampling temperature")
+
+
+class OpenAIConfig(BaseModel):
+    """OpenAI API configuration."""
+
+    model: str = Field(default="gpt-5-mini-2025-08-07", description="OpenAI model to use")
+    api_key: Optional[str] = Field(default=None, description="OpenAI API key")
+    max_tokens: int = Field(default=1024, description="Maximum tokens for response")
+    temperature: float = Field(default=0.4, description="Sampling temperature")
+
+
 class GitConfig(BaseModel):
     """Git configuration."""
 
@@ -297,17 +327,27 @@ class DocumentationConfig(BaseModel):
 class Settings(BaseModel):
     """Main configuration settings."""
 
-    model: HuggingFaceModel = Field(
-        default="qwen2.5-coder-1.5b", description="HuggingFace model to use"
+    provider: LLMProvider = Field(
+        default="huggingface", description="LLM provider to use"
     )
+    model: str = Field(
+        default="qwen2.5-coder-1.5b", description="LLM model to use"
+    )
+
     huggingface: HuggingFaceConfig = Field(
-        default_factory=lambda: HuggingFaceConfig(cache_dir=None)
+        default_factory=lambda: HuggingFaceConfig(model= "qwen2.5-coder-1.5b")
     )
+    gemini: GeminiConfig = Field(default_factory=lambda: GeminiConfig())
+    anthropic: AnthropicConfig = Field(default_factory=lambda: AnthropicConfig())
+    openai: OpenAIConfig = Field(default_factory=lambda: OpenAIConfig())
 
     git: GitConfig = Field(default_factory=lambda: GitConfig())
     github: GitHubConfig = Field(default_factory=lambda: GitHubConfig())
     documentation: DocumentationConfig = Field(
         default_factory=lambda: DocumentationConfig()
+    )
+    fallback_to_local: bool = Field(
+        default=False, description="Fallback to local model if API fails"
     )
 
     debug: bool = Field(default=False, description="Enable debug mode")
@@ -316,42 +356,41 @@ class Settings(BaseModel):
         default=Path(".commitlm-config.json"), description="Configuration file path"
     )
 
-    @field_validator("model")
-    @classmethod
-    def validate_model(cls, v: str) -> str:
-        """Validate that the model is supported."""
-        if v not in [
-            "phi-3-mini-128k",
-            "tinyllama",
-            "qwen2.5-coder-1.5b",
-        ]:
-            raise ValueError(f"Unsupported model: {v}")
-        return v
-
-    def model_post_init(self, _context: Any) -> None:
+    def model_post_init(self, _: Any) -> None:
         """Post-initialization validation."""
-        if self.huggingface.model != self.model:
-            self.huggingface.model = self.model
+        if self.provider == "huggingface":
+            if self.huggingface.model != self.model:
+                self.huggingface.model = cast(HuggingFaceModel, self.model)
+            model_info = CPU_MODEL_CONFIGS.get(self.model, {})
+            if model_info:
+                if (
+                    hasattr(self.huggingface, "max_tokens")
+                    and self.huggingface.max_tokens == 512
+                ):
+                    self.huggingface.max_tokens = model_info.get("max_tokens", 512)
+                if (
+                    hasattr(self.huggingface, "temperature")
+                    and self.huggingface.temperature == 0.3
+                ):
+                    self.huggingface.temperature = model_info.get("temperature", 0.3)
+        elif self.provider == "gemini":
+            self.gemini.model = self.model
+        elif self.provider == "anthropic":
+            self.anthropic.model = self.model
+        elif self.provider == "openai":
+            self.openai.model = self.model
 
-        model_info = CPU_MODEL_CONFIGS[self.model]
-        if (
-            hasattr(self.huggingface, "max_tokens")
-            and self.huggingface.max_tokens == 512
-        ):
-            self.huggingface.max_tokens = model_info["max_tokens"]
-        if (
-            hasattr(self.huggingface, "temperature")
-            and self.huggingface.temperature == 0.3
-        ):
-            self.huggingface.temperature = model_info["temperature"]
-
-    def get_active_llm_config(self) -> HuggingFaceConfig:
-        """Get the configuration for the active HuggingFace model."""
-        return self.huggingface
+    def get_active_llm_config(
+        self,
+    ) -> Union[HuggingFaceConfig, GeminiConfig, AnthropicConfig, OpenAIConfig]:
+        """Get the configuration for the active LLM provider."""
+        return getattr(self, self.provider)
 
     def get_model_info(self) -> Dict[str, Any]:
         """Get detailed information about the selected model."""
-        return CPU_MODEL_CONFIGS[self.model]
+        if self.provider == "huggingface":
+            return CPU_MODEL_CONFIGS.get(self.model, {})
+        return {}
 
     @classmethod
     def load_from_file(cls, config_path: Path) -> "Settings":
@@ -388,19 +427,19 @@ class Settings(BaseModel):
     def load_from_env_and_file(cls, config_path: Optional[Path] = None) -> "Settings":
         """Load settings with priority: CLI args > config file > env vars > defaults."""
         if config_path is None:
-            config_path = Path(".ai-docs-config.json")
+            config_path = Path(".commitlm-config.json")
 
         settings = cls.load_from_file(config_path)
 
         env_overrides = {}
 
-        if model := os.getenv("AI_DOCS_MODEL"):
+        if model := os.getenv("COMMITLM_MODEL"):
             env_overrides["model"] = model
 
-        if debug := os.getenv("AI_DOCS_DEBUG"):
+        if debug := os.getenv("COMMITLM_DEBUG"):
             env_overrides["debug"] = debug.lower() in ("true", "1", "yes")
 
-        if verbose := os.getenv("AI_DOCS_VERBOSE"):
+        if verbose := os.getenv("COMMITLM_VERBOSE"):
             env_overrides["verbose"] = verbose.lower() in ("true", "1", "yes")
 
         if env_overrides:

@@ -316,10 +316,10 @@ def get_prompt_manager() -> PromptManager:
     return _prompt_manager
 
 
-def render_documentation_prompt(diff_content: str, file_context: str = "", template_name: str = "documentation_generation", max_tokens: int = None) -> str:
+def render_documentation_prompt(diff_content: str, file_context: str = "", template_name: str = "documentation_generation", max_tokens: Optional[int] = None) -> str:
     """Convenience function to render documentation generation prompt."""
     manager = get_prompt_manager()
-    kwargs = {
+    kwargs: Dict[str, object] = {
         "diff_content": diff_content,
         "file_context": file_context
     }
