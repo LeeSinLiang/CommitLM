@@ -128,11 +128,11 @@ def init(
         with open(config_path, "w") as f:
             json.dump(config_data, f, indent=2)
         console.print(f"\n[green]✅ Configuration saved to {config_path}[/green]")
-        console.print("\n[bold]Next Steps:[/bold]")
-        console.print("• Run 'commitlm validate' to test the model connection")
-        console.print(
-            "• Run 'commitlm install-hook' to enable automatic documentation generation"
-        )
+
+        # Automatically run install-hook
+        console.print("\n[bold]Next Step: Installing Git Hooks[/bold]")
+        ctx.invoke(install_hook, force=force)
+
     except Exception as e:
         console.print(f"[red]❌ Failed to save configuration: {e}[/red]")
         sys.exit(1)
@@ -311,6 +311,9 @@ def status(ctx: click.Context):
     help="Override LLM provider for this generation",
 )
 @click.option("--model", type=str, help="Override LLM model for this generation")
+@click.option(
+    "--short-message", is_flag=True, help="Generate a short commit message", hidden=True
+)
 @click.pass_context
 def generate(
     ctx: click.Context,
@@ -319,8 +322,9 @@ def generate(
     output: Optional[str],
     provider: Optional[str],
     model: Optional[str],
+    short_message: bool,
 ):
-    """Generate documentation from git diff content."""
+    """Generate documentation or a short commit message from git diff content."""
     settings = ctx.obj["settings"]
 
     if file_path:
@@ -348,12 +352,19 @@ def generate(
                 settings_dict["model"] = model
             runtime_settings = Settings(**settings_dict)
 
+        client = create_llm_client(runtime_settings)
+
+        if short_message:
+            # When generating a short message for the hook, just print the raw text
+            message = client.generate_short_message(diff_content)
+            print(message)
+            sys.exit(0)
+
         console.print(
             f"[blue]Using provider: {runtime_settings.provider}, model: {runtime_settings.model}[/blue]"
         )
 
         with console.status("[bold green]Generating documentation..."):
-            client = create_llm_client(runtime_settings)
             documentation = client.generate_documentation(diff_content)
 
         if output:
@@ -435,102 +446,79 @@ def config_set(ctx: click.Context, key: str, value: str):
 
 
 @main.command()
-@click.option("--force", is_flag=True, help="Overwrite existing hook")
+@click.option("--force", is_flag=True, help="Overwrite existing hook(s)")
 @click.pass_context
 def install_hook(ctx: click.Context, force: bool):
-    """Install git post-commit hook for automatic documentation generation."""
+    """Install git hooks for automation."""
     from ..integrations.git_client import get_git_client, GitClientError
     from ..utils.helpers import get_git_root
 
-    console.print("[bold blue]🔗 Installing Git Post-Commit Hook[/bold blue]")
+    console.print("[bold blue]🔗 Installing Git Hooks[/bold blue]")
     git_root = get_git_root()
-    
+
     if not git_root:
         console.print("[red]Not in a git repository![/red]")
-        console.print("Please run this command from within a git repository.")
         sys.exit(1)
 
     console.print(f"[blue]📁 Git repository detected at: {git_root}[/blue]")
-    
-    config_path = git_root / ".commitlm-config.json"
-    if not config_path.exists():
-        console.print(f"[red]No CommitLM configuration found at: {config_path}[/red]")
-        console.print("Please run 'commitlm init' first to set up configuration.")
-        console.print("[blue]💡 Tip: Run 'commitlm init' and it will automatically save the config in the right place![/blue]")
-        sys.exit(1)
-    
-    console.print(f"[green]✓ Configuration found at: {config_path}[/green]")
 
-    try:
-        # Get git client
-        git_client = get_git_client()
+    hook_choice = click.prompt(
+        "Which hook do you want to install?",
+        type=click.Choice(
+            ["message", "docs", "both"], case_sensitive=False
+        ),
+        default="both",
+    )
 
-        # Check if hook already exists
-        hooks_dir = git_client.repo_path / ".git" / "hooks"
-        hook_file = hooks_dir / "post-commit"
+    if hook_choice in ["message", "both"]:
+        _install_prepare_commit_msg_hook(force)
 
-        if hook_file.exists() and not force:
-            if not click.confirm(
-                f"Post-commit hook already exists at {hook_file}. Overwrite?"
-            ):
-                console.print("[yellow]Installation cancelled.[/yellow]")
-                return
+    if hook_choice in ["docs", "both"]:
+        _install_post_commit_hook(force)
 
-        # Create temporary hook script
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".sh", delete=False
-        ) as tmp_file:
-            hook_script_path = Path(tmp_file.name)
-
-        # Generate the hook script
-        if git_client.create_post_commit_hook_script(hook_script_path):
-            # Install the hook
-            if git_client.install_post_commit_hook(hook_script_path):
-                console.print(
-                    "[green]✅ Post-commit hook installed successfully![/green]"
-                )
-                console.print(f"Location: {hook_file}")
-
-                # Show what happens next
-                console.print("\n[bold]What happens next:[/bold]")
-                console.print(
-                    "• Every time you make a git commit, documentation will be automatically generated"
-                )
-                console.print(
-                    "• Documentation files will be saved in the 'docs/' directory"
-                )
-                console.print(
-                    "• Files are named with commit hash and timestamp for easy identification"
-                )
-
-                console.print("\n[bold]Example workflow:[/bold]")
-                console.print("1. Make code changes")
-                console.print(
-                    "2. Run: git add . && git commit -m 'Your commit message'"
-                )
-                console.print(
-                    "3. AI docs will automatically generate documentation in docs/"
-                )
-            else:
-                console.print("[red]❌ Failed to install post-commit hook[/red]")
-                sys.exit(1)
+def _install_prepare_commit_msg_hook(force: bool):
+    """Install the prepare-commit-msg hook."""
+    from ..integrations.git_client import get_git_client, GitClientError
+    git_client = get_git_client()
+    hooks_dir = git_client.repo_path / ".git" / "hooks"
+    hook_file = hooks_dir / "prepare-commit-msg"
+    if hook_file.exists() and not force:
+        if not click.confirm(f"Hook already exists at {hook_file}. Overwrite?"):
+            console.print("[yellow]Installation cancelled.[/yellow]")
+            return
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp_file:
+        hook_script_path = Path(tmp_file.name)
+    if git_client.create_prepare_commit_msg_hook_script(hook_script_path):
+        if git_client.install_prepare_commit_msg_hook(hook_script_path):
+            console.print(f"[green]✅ prepare-commit-msg hook installed successfully![/green]")
         else:
-            console.print("[red]❌ Failed to create hook script[/red]")
-            sys.exit(1)
+            console.print("[red]❌ Failed to install prepare-commit-msg hook[/red]")
+    else:
+        console.print("[red]❌ Failed to create hook script[/red]")
+    hook_script_path.unlink(missing_ok=True)
 
-        # Clean up temporary file
-        hook_script_path.unlink(missing_ok=True)
-
-    except GitClientError as e:
-        console.print(f"[red]❌ Git error: {e}[/red]")
-        sys.exit(1)
-    except Exception as e:
-        console.print(f"[red]❌ Unexpected error: {e}[/red]")
-        if ctx.obj["debug"]:
-            console.print_exception()
-        sys.exit(1)
+def _install_post_commit_hook(force: bool):
+    """Install the post-commit hook."""
+    from ..integrations.git_client import get_git_client, GitClientError
+    git_client = get_git_client()
+    hooks_dir = git_client.repo_path / ".git" / "hooks"
+    hook_file = hooks_dir / "post-commit"
+    if hook_file.exists() and not force:
+        if not click.confirm(f"Hook already exists at {hook_file}. Overwrite?"):
+            console.print("[yellow]Installation cancelled.[/yellow]")
+            return
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp_file:
+        hook_script_path = Path(tmp_file.name)
+    if git_client.create_post_commit_hook_script(hook_script_path):
+        if git_client.install_post_commit_hook(hook_script_path):
+            console.print(f"[green]✅ post-commit hook installed successfully![/green]")
+        else:
+            console.print("[red]❌ Failed to install post-commit hook[/red]")
+    else:
+        console.print("[red]❌ Failed to create hook script[/red]")
+    hook_script_path.unlink(missing_ok=True)
 
 
 @main.command()

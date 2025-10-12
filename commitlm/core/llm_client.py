@@ -30,10 +30,15 @@ from ..config.settings import (
     OpenAIConfig,
     CPU_MODEL_CONFIGS,
 )
-from ..config.prompts import render_documentation_prompt
+from ..config.prompts import (
+    render_documentation_prompt,
+    render_short_commit_message_prompt,
+)
 from typing import Union
 
 logger = logging.getLogger(__name__)
+
+SHORT_MESSAGE_FALLBACK = "chore: failed to generate commit message"
 
 
 class LLMClientError(Exception):
@@ -70,11 +75,20 @@ class LLMClient(ABC):
         """Generate documentation from git diff content."""
         pass
 
+    @abstractmethod
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff content."""
+        pass
+
     @property
     @abstractmethod
     def provider_name(self) -> str:
         """Return the provider name."""
         pass
+
+    def _generate_short_message_fallback(self) -> str:
+        """Simple fallback for a short commit message."""
+        return SHORT_MESSAGE_FALLBACK
 
 
 class HuggingFaceClient(LLMClient):
@@ -418,6 +432,19 @@ Documentation generation encountered an issue. Please check the model configurat
         prompt = self._build_optimized_prompt_from_template(diff_content, file_context)
         return self.generate_text(prompt, **kwargs)
 
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff using local HuggingFace model."""
+        prompt = render_short_commit_message_prompt(diff_content)
+        # Use a smaller max_tokens for commit messages
+        response = self.generate_text(prompt, max_tokens=50, **kwargs)
+
+        # If generate_text fails, it returns the doc fallback. Check for it.
+        if response.startswith("# Code Changes"):
+            return self._generate_short_message_fallback()
+
+        # Clean up response to ensure it's a single line
+        return response.strip().split("\n")[0]
+
     def _build_optimized_prompt_from_template(
         self, diff_content: str, file_context: str = ""
     ) -> str:
@@ -530,6 +557,16 @@ class GeminiClient(LLMClient):
         )
         return self.generate_text(prompt, **kwargs)
 
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff using Gemini API."""
+        prompt = render_short_commit_message_prompt(diff_content)
+        response = self.generate_text(prompt, max_tokens=50, **kwargs)
+
+        if response.startswith("# Code Changes"):
+            return self._generate_short_message_fallback()
+
+        return response.strip().split("\n")[0]
+
     def _generate_fallback(self) -> str:
         """Simple fallback documentation."""
         return """# Code Changes
@@ -586,6 +623,16 @@ class AnthropicClient(LLMClient):
         )
         return self.generate_text(prompt, **kwargs)
 
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff using Anthropic API."""
+        prompt = render_short_commit_message_prompt(diff_content)
+        response = self.generate_text(prompt, max_tokens=50, **kwargs)
+
+        if response.startswith("# Code Changes"):
+            return self._generate_short_message_fallback()
+
+        return response.strip().split("\n")[0]
+
     def _generate_fallback(self) -> str:
         """Simple fallback documentation."""
         return """# Code Changes
@@ -641,6 +688,16 @@ class OpenAIClient(LLMClient):
             max_tokens=self.config.max_tokens,
         )
         return self.generate_text(prompt, **kwargs)
+
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff using OpenAI API."""
+        prompt = render_short_commit_message_prompt(diff_content)
+        response = self.generate_text(prompt, max_tokens=50, **kwargs)
+
+        if response.startswith("# Code Changes"):
+            return self._generate_short_message_fallback()
+
+        return response.strip().split("\n")[0]
 
     def _generate_fallback(self) -> str:
         """Simple fallback documentation."""

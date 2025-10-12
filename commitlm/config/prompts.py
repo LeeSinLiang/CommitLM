@@ -234,6 +234,30 @@ BREAKING CHANGE: describe breaking change if applicable
 Provide only the commit message, nothing else.""",
             "Generates conventional commit messages from git diffs"
         )
+
+        self.register_template(
+            "short_commit_message",
+            """Generate a single-line, conventional commit message based on the git diff.
+
+**Git Diff:**
+```diff
+{{ diff_content }}
+```
+
+**Instructions:**
+- Follow the conventional commits format: `type(scope): description`
+- The entire commit message must be a single line.
+- Do NOT include a body or any extra explanation.
+- Choose the most appropriate type (feat, fix, docs, style, refactor, test, chore).
+- The scope should be a short identifier of the code section affected.
+- The description should be a concise summary of the change.
+
+**Example:**
+`feat(api): add new user authentication endpoint`
+
+**Your output must be only the single-line commit message.**""",
+            "Generates a single-line conventional commit message from git diffs"
+        )
     
     def register_template(self, name: str, template: str, description: str = ""):
         """Register a new prompt template."""
@@ -364,3 +388,9 @@ def get_available_templates() -> Dict[str, str]:
     """Get list of available prompt templates."""
     manager = get_prompt_manager()
     return manager.list_templates()
+
+
+def render_short_commit_message_prompt(diff_content: str) -> str:
+    """Convenience function to render the short commit message prompt."""
+    manager = get_prompt_manager()
+    return manager.render_prompt("short_commit_message", diff_content=diff_content)

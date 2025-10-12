@@ -324,6 +324,14 @@ class DocumentationConfig(BaseModel):
     )
 
 
+class CommitMessageConfig(BaseModel):
+    """Commit message generation configuration."""
+
+    enabled: bool = Field(
+        default=True, description="Enable automatic commit message generation"
+    )
+
+
 class Settings(BaseModel):
     """Main configuration settings."""
 
@@ -345,6 +353,9 @@ class Settings(BaseModel):
     github: GitHubConfig = Field(default_factory=lambda: GitHubConfig())
     documentation: DocumentationConfig = Field(
         default_factory=lambda: DocumentationConfig()
+    )
+    commit_message: CommitMessageConfig = Field(
+        default_factory=lambda: CommitMessageConfig()
     )
     fallback_to_local: bool = Field(
         default=False, description="Fallback to local model if API fails"

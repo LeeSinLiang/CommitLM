@@ -261,6 +261,26 @@ class GitClient:
         except Exception as e:
             logger.error(f"Failed to install post-commit hook: {e}")
             return False
+
+    def install_prepare_commit_msg_hook(self, hook_script_path: Path) -> bool:
+        """Install a prepare-commit-msg hook script."""
+        try:
+            hooks_dir = self.repo_path / ".git" / "hooks"
+            hook_file = hooks_dir / "prepare-commit-msg"
+
+            hooks_dir.mkdir(exist_ok=True)
+
+            import shutil
+            shutil.copy2(hook_script_path, hook_file)
+
+            hook_file.chmod(0o755)
+
+            logger.info(f"Prepare-commit-msg hook installed at {hook_file}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to install prepare-commit-msg hook: {e}")
+            return False
     
     def create_post_commit_hook_script(self, output_path: Path) -> bool:
         """Create a post-commit hook script that calls CommitLM.
@@ -357,6 +377,43 @@ echo "CommitLM: Documentation generated at $DOC_FILENAME"
             
         except Exception as e:
             logger.error(f"Failed to create post-commit hook script: {e}")
+            return False
+
+    def create_prepare_commit_msg_hook_script(self, output_path: Path) -> bool:
+        """Create a prepare-commit-msg hook script that calls CommitLM."""
+        try:
+            hook_content = """#!/bin/bash
+# CommitLM Generator Prepare-Commit-Msg Hook
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+COMMIT_SHA=$3
+
+# Only run if no message is specified via -m or -F
+if [ "$COMMIT_SOURCE" != "message" ]; then
+    # Check if the feature is enabled in the config
+    if grep -q '"enabled": true' .commitlm-config.json 2>/dev/null; then
+        # Get staged diff
+        DIFF_OUTPUT=$(git diff --cached)
+
+        if [ -n "$DIFF_OUTPUT" ]; then
+            # Call commitlm to generate message
+            GENERATED_MSG=$(echo "$DIFF_OUTPUT" | commitlm generate --short-message)
+
+            # Write message to commit message file
+            echo "$GENERATED_MSG" > "$COMMIT_MSG_FILE"
+        fi
+    fi
+fi
+"""
+            with open(output_path, 'w') as f:
+                f.write(hook_content)
+
+            output_path.chmod(0o755)
+            logger.info(f"Prepare-commit-msg hook script created at {output_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create prepare-commit-msg hook script: {e}")
             return False
 
 
