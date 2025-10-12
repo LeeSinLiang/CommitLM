@@ -273,7 +273,7 @@ class GitClient:
             python_exec = sys.executable
             
             hook_content = """#!/bin/bash
-# AI Docs Generator Post-Commit Hook
+# CommitLM Post-Commit Hook
 # This script automatically generates documentation after each commit
 
 # Exit on any error
@@ -285,12 +285,12 @@ cd "$REPO_ROOT"
 
 # Check if CommitLM is configured
 if [ ! -f ".commitlm-config.json" ]; then
-    echo "AI Docs: No configuration found, skipping documentation generation"
+    echo "CommitLM: No configuration found, skipping documentation generation"
     exit 0
 fi
 
 # Generate documentation from the last commit
-echo "AI Docs: Generating documentation for latest commit..."
+echo "CommitLM: Generating documentation for latest commit..."
 
 # Get the commit hash
 COMMIT_HASH="$(git rev-parse HEAD)"
@@ -302,7 +302,7 @@ DIFF_OUTPUT="$(git show --no-merges --format="" $COMMIT_HASH)"
 
 # Skip if no changes (merge commits, etc.)
 if [ -z "$DIFF_OUTPUT" ]; then
-    echo "AI Docs: No changes to document, skipping"
+    echo "CommitLM: No changes to document, skipping"
     exit 0
 fi
 
@@ -313,12 +313,12 @@ mkdir -p docs
 TIMESTAMP="$(date +"%Y%m%d_%H%M%S")"
 DOC_FILENAME="docs/commit_${COMMIT_SHORT}_${TIMESTAMP}.md"
 
-# Use ai-docs global command
-ai-docs generate \\
+# Use commitlm global command
+commitlm generate \\
     --output "$DOC_FILENAME" \\
     "$DIFF_OUTPUT" \\
     2>/dev/null || {
-    echo "AI Docs: Failed to generate documentation"
+    echo "CommitLM: Failed to generate documentation"
     exit 1
 }
 
@@ -327,9 +327,9 @@ TEMP_FILE="${DOC_FILENAME}.tmp"
 cat > "$TEMP_FILE" << EOF
 # Documentation for Commit $COMMIT_SHORT
 
-**Commit Hash:** `$COMMIT_HASH`  
-**Commit Message:** $COMMIT_MSG  
-**Generated:** $(date)  
+**Commit Hash:** `$COMMIT_HASH`
+**Commit Message:** $COMMIT_MSG
+**Generated:** $(date)
 **Repository:** $(basename "$REPO_ROOT")
 
 ---
@@ -340,7 +340,7 @@ EOF
 cat "$DOC_FILENAME" >> "$TEMP_FILE"
 mv "$TEMP_FILE" "$DOC_FILENAME"
 
-echo "AI Docs: Documentation generated at $DOC_FILENAME"
+echo "CommitLM: Documentation generated at $DOC_FILENAME"
 """
 
             # Write the hook script

@@ -427,19 +427,19 @@ class Settings(BaseModel):
     def load_from_env_and_file(cls, config_path: Optional[Path] = None) -> "Settings":
         """Load settings with priority: CLI args > config file > env vars > defaults."""
         if config_path is None:
-            config_path = Path(".ai-docs-config.json")
+            config_path = Path(".commitlm-config.json")
 
         settings = cls.load_from_file(config_path)
 
         env_overrides = {}
 
-        if model := os.getenv("AI_DOCS_MODEL"):
+        if model := os.getenv("COMMITLM_MODEL"):
             env_overrides["model"] = model
 
-        if debug := os.getenv("AI_DOCS_DEBUG"):
+        if debug := os.getenv("COMMITLM_DEBUG"):
             env_overrides["debug"] = debug.lower() in ("true", "1", "yes")
 
-        if verbose := os.getenv("AI_DOCS_VERBOSE"):
+        if verbose := os.getenv("COMMITLM_VERBOSE"):
             env_overrides["verbose"] = verbose.lower() in ("true", "1", "yes")
 
         if env_overrides:

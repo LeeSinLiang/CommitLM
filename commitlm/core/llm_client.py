@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 import logging
+import os
 
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
@@ -16,7 +17,8 @@ except ImportError:
     pipeline = None
     torch = None
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import anthropic
 import openai
 
@@ -486,19 +488,31 @@ class GeminiClient(LLMClient):
             raise LLMClientError(
                 "GEMINI_API_KEY not found in config file or environment variables."
             )
-        genai.configure(api_key=api_key)
-        self._client = genai.GenerativeModel(self.config.model)
+        self._client = genai.Client(api_key=api_key)
+        self.model = self.config.model
 
     def generate_text(self, prompt: str, **kwargs) -> str:
         """Generate text using Gemini API."""
         try:
-            generation_config = genai.types.GenerationConfig(
-                max_output_tokens=self.config.max_tokens,
+            # Workaround for Gemini 2.5 models: max_output_tokens can cause empty responses
+            # Only use temperature for now
+            generation_config = types.GenerateContentConfig(
                 temperature=self.config.temperature,
             )
-            response = self._client.generate_content(
-                prompt, generation_config=generation_config
+            response = self._client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=generation_config
             )
+            # Handle potential None response
+            if response.text is None:
+                logger.warning("Gemini returned None response, trying to access candidates")
+                if response.candidates and len(response.candidates) > 0:
+                    candidate = response.candidates[0]
+                    if candidate.content and candidate.content.parts:
+                        return candidate.content.parts[0].text or self._generate_fallback()
+                logger.error(f"Empty response from Gemini. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'Unknown'}")
+                return self._generate_fallback()
             return response.text
         except Exception as e:
             logger.error(f"Gemini API call failed: {e}")
