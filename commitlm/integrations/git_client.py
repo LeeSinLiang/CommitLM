@@ -283,8 +283,8 @@ set -e
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-# Check if ai-docs is configured
-if [ ! -f ".ai-docs-config.json" ]; then
+# Check if CommitLM is configured
+if [ ! -f ".commitlm-config.json" ]; then
     echo "AI Docs: No configuration found, skipping documentation generation"
     exit 0
 fi
