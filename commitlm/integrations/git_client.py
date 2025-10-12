@@ -323,14 +323,16 @@ commitlm generate \\
 }
 
 # Add metadata header to the generated file
+GENERATED_DATE="$(date)"
+REPO_NAME="$(basename "$REPO_ROOT")"
 TEMP_FILE="${DOC_FILENAME}.tmp"
 cat > "$TEMP_FILE" << EOF
 # Documentation for Commit $COMMIT_SHORT
 
-**Commit Hash:** `$COMMIT_HASH`
+**Commit Hash:** $COMMIT_HASH
 **Commit Message:** $COMMIT_MSG
-**Generated:** $(date)
-**Repository:** $(basename "$REPO_ROOT")
+**Generated:** $GENERATED_DATE
+**Repository:** $REPO_NAME
 
 ---
 
