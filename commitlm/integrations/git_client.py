@@ -23,86 +23,95 @@ logger = logging.getLogger(__name__)
 
 class GitClientError(Exception):
     """Base exception for git client errors."""
+
     pass
 
 
 class GitClient:
     """Git client for repository operations and diff extraction."""
-    
+
     def __init__(self, repo_path: Optional[Path] = None):
         """Initialize git client.
-        
+
         Args:
             repo_path: Path to git repository. If None, uses current directory.
         """
         self.repo_path = repo_path or Path.cwd()
         self._repo = None
         self._setup_repo()
-    
+
     def _setup_repo(self) -> None:
         """Setup git repository connection."""
         if git is None:
-            raise GitClientError("GitPython package not installed. Install with: pip install gitpython")
-        
+            raise GitClientError(
+                "GitPython package not installed. Install with: pip install gitpython"
+            )
+
         git_root = get_git_root(self.repo_path)
         if not git_root:
             raise GitClientError(f"No git repository found at {self.repo_path}")
-        
+
         self.repo_path = git_root
-        
+
         if Repo is None:
-            raise GitClientError("GitPython library not available. Install with: pip install GitPython")
-            
+            raise GitClientError(
+                "GitPython library not available. Install with: pip install GitPython"
+            )
+
         try:
             self._repo = Repo(self.repo_path)
             logger.info(f"Git client initialized for repository: {self.repo_path}")
         except Exception as e:
             raise GitClientError(f"Failed to initialize git repository: {e}")
-    
+
     @property
     def repo(self) -> "RepoType":
         """Get the git repository object."""
         if self._repo is None:
             self._setup_repo()
         return cast("RepoType", self._repo)
-    
+
     def get_last_commit_diff(self, ignore_patterns: Optional[List[str]] = None) -> str:
         """Get the diff for the last commit.
-        
+
         Args:
             ignore_patterns: List of file patterns to ignore
-            
+
         Returns:
             Git diff as string
         """
         try:
             last_commit = self.repo.head.commit
-            
+
             if last_commit.parents:
                 parent_commit = last_commit.parents[0]
                 diff = self.repo.git.diff(parent_commit.hexsha, last_commit.hexsha)
             else:
-                diff = self.repo.git.diff("4b825dc642cb6eb9a060e54bf8d69288fbee4904", last_commit.hexsha)
-            
+                diff = self.repo.git.diff(
+                    "4b825dc642cb6eb9a060e54bf8d69288fbee4904", last_commit.hexsha
+                )
+
             if ignore_patterns:
                 diff = self._filter_diff_by_patterns(diff, ignore_patterns)
-            
+
             return diff
-            
+
         except GitCommandError as e:
             logger.error(f"Failed to get git diff: {e}")
             raise GitClientError(f"Failed to get git diff: {e}")
         except Exception as e:
             logger.error(f"Unexpected error getting git diff: {e}")
             raise GitClientError(f"Unexpected error getting git diff: {e}")
-    
-    def get_diff_between_commits(self, from_commit: str, to_commit: str = "HEAD") -> str:
+
+    def get_diff_between_commits(
+        self, from_commit: str, to_commit: str = "HEAD"
+    ) -> str:
         """Get diff between two commits.
-        
+
         Args:
             from_commit: Starting commit hash or reference
             to_commit: Ending commit hash or reference (default: HEAD)
-            
+
         Returns:
             Git diff as string
         """
@@ -110,43 +119,45 @@ class GitClient:
             diff = self.repo.git.diff(from_commit, to_commit)
             return diff
         except GitCommandError as e:
-            logger.error(f"Failed to get diff between {from_commit} and {to_commit}: {e}")
+            logger.error(
+                f"Failed to get diff between {from_commit} and {to_commit}: {e}"
+            )
             raise GitClientError(f"Failed to get diff between commits: {e}")
-    
+
     def get_last_commit_info(self) -> Dict[str, Any]:
         """Get information about the last commit.
-        
+
         Returns:
             Dictionary with commit information
         """
         try:
             last_commit = self.repo.head.commit
-            
+
             return {
-                'hash': last_commit.hexsha,
-                'short_hash': last_commit.hexsha[:8],
-                'message': last_commit.message.strip(),
-                'author': {
-                    'name': last_commit.author.name,
-                    'email': last_commit.author.email
+                "hash": last_commit.hexsha,
+                "short_hash": last_commit.hexsha[:8],
+                "message": last_commit.message.strip(),
+                "author": {
+                    "name": last_commit.author.name,
+                    "email": last_commit.author.email,
                 },
-                'committer': {
-                    'name': last_commit.committer.name,
-                    'email': last_commit.committer.email
+                "committer": {
+                    "name": last_commit.committer.name,
+                    "email": last_commit.committer.email,
                 },
-                'timestamp': last_commit.committed_datetime,
-                'files_changed': self._get_changed_files(last_commit)
+                "timestamp": last_commit.committed_datetime,
+                "files_changed": self._get_changed_files(last_commit),
             }
         except Exception as e:
             logger.error(f"Failed to get commit info: {e}")
             raise GitClientError(f"Failed to get commit info: {e}")
-    
+
     def get_changed_files(self, commit_hash: Optional[str] = None) -> List[str]:
         """Get list of files changed in a commit.
-        
+
         Args:
             commit_hash: Commit to analyze (default: last commit)
-            
+
         Returns:
             List of changed file paths
         """
@@ -155,12 +166,12 @@ class GitClient:
                 commit = self.repo.commit(commit_hash)
             else:
                 commit = self.repo.head.commit
-            
+
             return self._get_changed_files(commit)
         except Exception as e:
             logger.error(f"Failed to get changed files: {e}")
             raise GitClientError(f"Failed to get changed files: {e}")
-    
+
     def _get_changed_files(self, commit) -> List[str]:
         """Get list of files changed in a specific commit."""
         try:
@@ -169,52 +180,55 @@ class GitClient:
                 diff_index = parent.diff(commit)
             else:
                 diff_index = commit.diff("4b825dc642cb6eb9a060e54bf8d69288fbee4904")
-            
+
             changed_files = []
             for diff_item in diff_index:
                 if diff_item.a_path:
                     changed_files.append(diff_item.a_path)
                 if diff_item.b_path and diff_item.b_path != diff_item.a_path:
                     changed_files.append(diff_item.b_path)
-            
+
             return list(set(changed_files))
         except Exception as e:
             logger.warning(f"Failed to get changed files for commit: {e}")
             return []
-    
+
     def _filter_diff_by_patterns(self, diff: str, ignore_patterns: List[str]) -> str:
         """Filter diff content by removing ignored file patterns."""
         if not ignore_patterns:
             return diff
-        
-        lines = diff.split('\n')
+
+        lines = diff.split("\n")
         filtered_lines = []
         current_file = None
         skip_file = False
-        
+
         for line in lines:
-            if line.startswith('diff --git'):
-                parts = line.split(' ')
+            if line.startswith("diff --git"):
+                parts = line.split(" ")
                 if len(parts) >= 4:
                     current_file = parts[3][2:]
-                    
+
                     skip_file = any(
-                        self._match_pattern(current_file, pattern) 
+                        self._match_pattern(current_file, pattern)
                         for pattern in ignore_patterns
                     )
-                
+
                 if not skip_file:
                     filtered_lines.append(line)
             elif not skip_file:
                 filtered_lines.append(line)
-        
-        return '\n'.join(filtered_lines)
-    
+
+        return "\n".join(filtered_lines)
+
     def _match_pattern(self, filepath: str, pattern: str) -> bool:
         """Check if a file path matches an ignore pattern."""
         import fnmatch
-        return fnmatch.fnmatch(filepath, pattern) or fnmatch.fnmatch(os.path.basename(filepath), pattern)
-    
+
+        return fnmatch.fnmatch(filepath, pattern) or fnmatch.fnmatch(
+            os.path.basename(filepath), pattern
+        )
+
     def is_clean_working_tree(self) -> bool:
         """Check if the working tree is clean (no uncommitted changes)."""
         try:
@@ -222,7 +236,7 @@ class GitClient:
         except Exception as e:
             logger.warning(f"Failed to check working tree status: {e}")
             return False
-    
+
     def get_current_branch(self) -> str:
         """Get the name of the current branch."""
         try:
@@ -230,34 +244,35 @@ class GitClient:
         except Exception as e:
             logger.warning(f"Failed to get current branch: {e}")
             return "unknown"
-    
+
     def get_repo_name(self) -> str:
         """Get the repository name."""
         return self.repo_path.name
-    
+
     def install_post_commit_hook(self, hook_script_path: Path) -> bool:
         """Install a post-commit hook script.
-        
+
         Args:
             hook_script_path: Path to the hook script to install
-            
+
         Returns:
             True if installation successful, False otherwise
         """
         try:
             hooks_dir = self.repo_path / ".git" / "hooks"
             hook_file = hooks_dir / "post-commit"
-            
+
             hooks_dir.mkdir(exist_ok=True)
-            
+
             import shutil
+
             shutil.copy2(hook_script_path, hook_file)
-            
+
             hook_file.chmod(0o755)
-            
+
             logger.info(f"Post-commit hook installed at {hook_file}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to install post-commit hook: {e}")
             return False
@@ -271,6 +286,7 @@ class GitClient:
             hooks_dir.mkdir(exist_ok=True)
 
             import shutil
+
             shutil.copy2(hook_script_path, hook_file)
 
             hook_file.chmod(0o755)
@@ -281,7 +297,7 @@ class GitClient:
         except Exception as e:
             logger.error(f"Failed to install prepare-commit-msg hook: {e}")
             return False
-    
+
     def create_post_commit_hook_script(self, output_path: Path) -> bool:
         """Create a post-commit hook script that calls CommitLM.
 
@@ -329,9 +345,25 @@ fi
 # Create docs directory if it doesn't exist
 mkdir -p docs
 
-# Generate timestamp for filename
-TIMESTAMP="$(date +"%Y%m%d_%H%M%S")"
-DOC_FILENAME="docs/commit_${COMMIT_SHORT}_${TIMESTAMP}.md"
+# Sanitize commit message for use in filename
+# Convert to lowercase, replace spaces with hyphens, remove special chars, truncate
+SANITIZED_MSG=$(echo "$COMMIT_MSG" | \\
+    tr '[:upper:]' '[:lower:]' | \\
+    sed 's/[^a-z0-9 -]//g' | \\
+    sed 's/ /-/g' | \\
+    sed 's/--*/-/g' | \\
+    cut -c1-50)
+
+# Remove trailing hyphens
+SANITIZED_MSG=$(echo "$SANITIZED_MSG" | sed 's/-*$//')
+
+# Fallback to "unnamed" if sanitization results in empty string
+if [ -z "$SANITIZED_MSG" ]; then
+    SANITIZED_MSG="unnamed"
+fi
+
+# Generate filename with sanitized message and short hash for uniqueness
+DOC_FILENAME="docs/commit_${SANITIZED_MSG}_${COMMIT_SHORT}.md"
 
 # Use commitlm global command
 commitlm generate \\
@@ -366,15 +398,15 @@ echo "CommitLM: Documentation generated at $DOC_FILENAME"
 """
 
             # Write the hook script
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 f.write(hook_content)
-            
+
             # Make it executable
             output_path.chmod(0o755)
-            
+
             logger.info(f"Post-commit hook script created at {output_path}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to create post-commit hook script: {e}")
             return False
@@ -406,7 +438,7 @@ if [ "$COMMIT_SOURCE" != "message" ]; then
     fi
 fi
 """
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 f.write(hook_content)
 
             output_path.chmod(0o755)

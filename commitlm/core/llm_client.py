@@ -35,7 +35,6 @@ from ..config.prompts import (
     render_documentation_prompt,
     render_short_commit_message_prompt,
 )
-from typing import Union, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +140,7 @@ class HuggingFaceClient(LLMClient):
                 "low_cpu_mem_usage": True,
                 "cache_dir": self.config.cache_dir,
             }
-            
+
             # Only use device_map for GPU acceleration, not for CPU
             if optimal_device in ["cuda", "mps"]:
                 model_kwargs["device_map"] = "auto"
@@ -157,14 +156,14 @@ class HuggingFaceClient(LLMClient):
                 model_kwargs["rope_scaling"] = rope_scaling
 
             if self.config.should_use_8bit_quantization():
-                try:
-                    import bitsandbytes
+                import importlib.util
 
+                if importlib.util.find_spec("bitsandbytes") is not None:
                     model_kwargs["load_in_8bit"] = True
                     logger.info(
                         f"Enabling 8-bit quantization for {self.model_name} (memory optimization ON)"
                     )
-                except ImportError:
+                else:
                     logger.warning(
                         "bitsandbytes not available, skipping 8-bit quantization"
                     )
@@ -176,17 +175,20 @@ class HuggingFaceClient(LLMClient):
             if optimal_device == "cuda" and self.model_key in [
                 "qwen2.5-coder-1.5b",
             ]:
-                try:
-                    import flash_attn
+                import importlib.util
 
-                    model_kwargs["attn_implementation"] = "flash_attention_2"
-                    logger.info("Enabling Flash Attention 2 for GPU acceleration")
-                except ImportError:
+                if importlib.util.find_spec("flash_attn") is not None:
+                    try:
+                        model_kwargs["attn_implementation"] = "flash_attention_2"
+                        logger.info("Enabling Flash Attention 2 for GPU acceleration")
+                    except Exception as e:
+                        logger.debug(
+                            f"Flash Attention 2 not supported for this model: {e}"
+                        )
+                else:
                     logger.debug(
                         "Flash Attention 2 not installed, using standard attention"
                     )
-                except Exception as e:
-                    logger.debug(f"Flash Attention 2 not supported for this model: {e}")
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name, **model_kwargs
@@ -380,7 +382,6 @@ class HuggingFaceClient(LLMClient):
             # Fallback to manual formatting
             return f"<|system|>\nYou are a helpful AI assistant specialized in code analysis and documentation generation.<|end|>\n<|user|>\n{prompt}<|end|>\n<|assistant|>\n"
 
-
     def _extract_response(self, full_response: str, prompt: str) -> str:
         """Extract the actual response from the full generated text."""
         # Remove the prompt from the response
@@ -461,7 +462,7 @@ Documentation generation encountered an issue. Please check the model configurat
         try:
             # Get effective max tokens to inform the model
             max_tokens = self.config.get_effective_max_tokens()
-            
+
             prompt = render_documentation_prompt(
                 diff_content=diff_content,
                 file_context=file_context,
@@ -527,23 +528,29 @@ class GeminiClient(LLMClient):
                 temperature=self.config.temperature,
             )
             response = self._client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config=generation_config
+                model=self.model, contents=prompt, config=generation_config
             )
             # Handle potential None response
             if response.text is None:
-                logger.warning("Gemini returned None response, trying to access candidates")
+                logger.warning(
+                    "Gemini returned None response, trying to access candidates"
+                )
                 if response.candidates and len(response.candidates) > 0:
                     candidate = response.candidates[0]
                     if candidate.content and candidate.content.parts:
-                        return candidate.content.parts[0].text or self._generate_fallback()
-                logger.error(f"Empty response from Gemini. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'Unknown'}")
+                        return (
+                            candidate.content.parts[0].text or self._generate_fallback()
+                        )
+                logger.error(
+                    f"Empty response from Gemini. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'Unknown'}"
+                )
                 return self._generate_fallback()
             return response.text
         except google_exceptions.PermissionDenied as e:
             logger.error(f"Gemini API key is invalid: {e}")
-            raise LLMClientError("Gemini API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
+            raise LLMClientError(
+                "Gemini API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file."
+            )
         except Exception as e:
             logger.error(f"Gemini API call failed: {e}")
             return self._generate_fallback()
@@ -613,7 +620,9 @@ class AnthropicClient(LLMClient):
         except anthropic.APIStatusError as e:
             if e.status_code == 401:
                 logger.error(f"Anthropic API key is invalid: {e}")
-                raise LLMClientError("Anthropic API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
+                raise LLMClientError(
+                    "Anthropic API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file."
+                )
             logger.error(f"Anthropic API call failed: {e}")
             return self._generate_fallback()
         except Exception as e:
@@ -684,7 +693,9 @@ class OpenAIClient(LLMClient):
             return response.choices[0].message.content or ""
         except openai.AuthenticationError as e:
             logger.error(f"OpenAI API key is invalid: {e}")
-            raise LLMClientError("OpenAI API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
+            raise LLMClientError(
+                "OpenAI API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file."
+            )
         except Exception as e:
             logger.error(f"OpenAI API call failed: {e}")
             return self._generate_fallback()
@@ -736,7 +747,7 @@ class LLMClientFactory:
     def create_client(settings: Settings, task: Optional[str] = None) -> LLMClient:
         """Create an LLM client based on the settings."""
         active_config = settings.get_active_llm_config(task)
-        
+
         provider = settings.provider
         if task:
             task_settings = getattr(settings, task, None)

@@ -1,17 +1,14 @@
 """Configuration settings for AI docs generator using Pydantic v2."""
 
-import os
 import json
 from pathlib import Path
-from typing import Optional, Literal, Any, Dict, Union, cast
+from typing import Optional, Literal, Any, Dict, Union
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv()
 
-HuggingFaceModel = Literal[
-    "phi-3-mini-128k", "tinyllama", "qwen2.5-coder-1.5b"
-]
+HuggingFaceModel = Literal["phi-3-mini-128k", "tinyllama", "qwen2.5-coder-1.5b"]
 LLMProvider = Literal["huggingface", "gemini", "anthropic", "openai"]
 
 CPU_MODEL_CONFIGS = {
@@ -95,7 +92,9 @@ class HuggingFaceConfig(BaseModel):
     temperature: float = Field(
         default=0.3, ge=0.0, le=2.0, description="Sampling temperature"
     )
-    cache_dir: Optional[str] = Field(default=None, description="Custom model cache directory")
+    cache_dir: Optional[str] = Field(
+        default=None, description="Custom model cache directory"
+    )
     device: str = Field(
         default="auto",
         description="Device to run model on ('auto', 'cpu', 'cuda', 'mps')",
@@ -213,22 +212,28 @@ class HuggingFaceConfig(BaseModel):
         """Get YaRN configuration for the current model."""
         if not self.enable_yarn or not self.supports_yarn():
             return {}
-        
+
         model_info = self.get_model_info()
         base_yarn_config = model_info.get("yarn_config", {})
-        
+
         if self.memory_optimization:
             memory_config = model_info.get("memory_optimized", {})
-            yarn_factor = memory_config.get("yarn_factor", base_yarn_config.get("factor", 2.0))
+            yarn_factor = memory_config.get(
+                "yarn_factor", base_yarn_config.get("factor", 2.0)
+            )
             extended_context = memory_config.get("extended_context", 65536)
         else:
             performance_config = model_info.get("full_performance", {})
-            yarn_factor = performance_config.get("yarn_factor", base_yarn_config.get("factor", 4.0))
+            yarn_factor = performance_config.get(
+                "yarn_factor", base_yarn_config.get("factor", 4.0)
+            )
             extended_context = performance_config.get("extended_context", 131072)
-        
+
         return {
             "factor": yarn_factor,
-            "original_max_position_embeddings": base_yarn_config.get("original_max_position_embeddings", 32768),
+            "original_max_position_embeddings": base_yarn_config.get(
+                "original_max_position_embeddings", 32768
+            ),
             "type": "yarn",
             "extended_context": extended_context,
         }
@@ -237,12 +242,14 @@ class HuggingFaceConfig(BaseModel):
         """Get RoPE scaling configuration for model loading."""
         if not self.enable_yarn or not self.supports_yarn():
             return None
-        
+
         yarn_config = self.get_yarn_config()
         return {
             "type": "yarn",
             "factor": yarn_config["factor"],
-            "original_max_position_embeddings": yarn_config["original_max_position_embeddings"],
+            "original_max_position_embeddings": yarn_config[
+                "original_max_position_embeddings"
+            ],
         }
 
 
@@ -269,7 +276,9 @@ class AnthropicConfig(BaseModel):
 class OpenAIConfig(BaseModel):
     """OpenAI API configuration."""
 
-    model: str = Field(default="gpt-5-mini-2025-08-07", description="OpenAI model to use")
+    model: str = Field(
+        default="gpt-5-mini-2025-08-07", description="OpenAI model to use"
+    )
     api_key: Optional[str] = Field(default=None, description="OpenAI API key")
     max_tokens: int = Field(default=1024, description="Maximum tokens for response")
     temperature: float = Field(default=0.4, description="Sampling temperature")
@@ -319,6 +328,7 @@ class DocumentationConfig(BaseModel):
 
 class TaskSettings(BaseModel):
     """Configuration for a specific task."""
+
     provider: Optional[str] = None
     model: Optional[str] = None
 
@@ -337,8 +347,12 @@ class Settings(BaseModel):
     documentation: DocumentationConfig = DocumentationConfig()
     fallback_to_local: bool = False
 
-    commit_message_enabled: bool = Field(default=False, description="Enable commit message generation")
-    doc_generation_enabled: bool = Field(default=False, description="Enable documentation generation")
+    commit_message_enabled: bool = Field(
+        default=False, description="Enable commit message generation"
+    )
+    doc_generation_enabled: bool = Field(
+        default=False, description="Enable documentation generation"
+    )
 
     commit_message: Optional[TaskSettings] = None
     doc_generation: Optional[TaskSettings] = None

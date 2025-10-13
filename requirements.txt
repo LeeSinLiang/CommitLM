@@ -12,6 +12,7 @@ bitsandbytes  # For 8-bit quantization on GPU
 # CLI and UI
 click>=8.0
 rich
+InquirerPy
 
 # Configuration and validation
 pydantic>=2.0
