@@ -12,6 +12,7 @@ from rich.table import Table
 
 from ..config.settings import init_settings, CPU_MODEL_CONFIGS, TaskSettings
 from ..core.llm_client import LLMClientError, get_available_models
+from .init_command import init_command
 
 console = Console()
 
@@ -84,145 +85,7 @@ def init(
     force: bool,
 ):
     """Initialize CommitLM configuration."""
-    console.print("[bold blue]🚀 Initializing CommitLM[/bold blue]")
-
-    from ..utils.helpers import get_git_root
-    git_root = get_git_root()
-    
-    if git_root:
-        config_path = git_root / ".commitlm-config.json"
-        console.print(f"[blue]📁 Detected git repository at: {git_root}[/blue]")
-        console.print(f"[blue]💾 Configuration will be saved to: {config_path}[/blue]")
-    else:
-        config_path = Path(".commitlm-config.json")
-        console.print("[yellow]⚠️  No git repository detected. Saving config in current directory.[/yellow]")
-
-    if config_path.exists() and not force:
-        if not click.confirm(
-            f"Configuration file {config_path} already exists. Overwrite?"
-        ):
-            console.print("[yellow]Initialization cancelled.[/yellow]")
-            return
-
-    if not provider:
-        provider = click.prompt(
-            "Select LLM provider",
-            type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
-            default="huggingface",
-        )
-
-    # At this point, provider is guaranteed to be a string
-    assert provider is not None, "Provider must be set"
-
-    config_data = {"provider": provider, "documentation": {"output_dir": output_dir}}
-
-    if provider == "huggingface":
-        _init_huggingface(config_data, model)
-    else:
-        _init_api_provider(config_data, provider, model)
-
-    enabled_tasks = click.prompt(
-        "Which tasks do you want to enable?",
-        type=click.Choice(["commit_message", "doc_generation", "both"]),
-        default="both"
-    )
-    config_data["commit_message_enabled"] = enabled_tasks in ["commit_message", "both"]
-    config_data["doc_generation_enabled"] = enabled_tasks in ["doc_generation", "both"]
-
-    if click.confirm("\nDo you want to use different models for specific tasks?", default=False):
-        if config_data["commit_message_enabled"] and click.confirm("  - Configure a specific model for commit message generation?", default=True):
-            task_config = _prompt_for_task_model(provider)
-            config_data["commit_message"] = task_config
-
-        if config_data["doc_generation_enabled"] and click.confirm("  - Configure a specific model for documentation generation?", default=True):
-            task_config = _prompt_for_task_model(provider)
-            config_data["doc_generation"] = task_config
-
-    fallback_to_local = click.confirm(
-        "\nEnable fallback to a local model if the API fails?", default=False
-    )
-    config_data["fallback_to_local"] = fallback_to_local
-
-    try:
-        with open(config_path, "w") as f:
-            json.dump(config_data, f, indent=2)
-        console.print(f"\n[green]✅ Configuration saved to {config_path}[/green]")
-
-        # Automatically run install-hook
-        console.print("\n[bold]Next Step: Installing Git Hooks[/bold]")
-        hook_type = "none"
-        if config_data["commit_message_enabled"] and config_data["doc_generation_enabled"]:
-            hook_type = "both"
-        elif config_data["commit_message_enabled"]:
-            hook_type = "message"
-        elif config_data["doc_generation_enabled"]:
-            hook_type = "docs"
-        
-        if hook_type != "none":
-            ctx.invoke(install_hook, hook_type=hook_type, force=force)
-
-        # Prompt to set up alias
-        if config_data["commit_message_enabled"] and click.confirm("\nWould you like to set up a git alias for easier commits?"):
-            ctx.invoke(set_alias)
-        else:
-            console.print("\nTo generate a commit message, you can run:")
-            console.print("[bold cyan]git diff --cached | commitlm generate --short-message[/bold cyan]")
-            console.print("\nYou can set up an alias for this command later by running:")
-            console.print("[bold cyan]commitlm set-alias[/bold cyan]")
-
-    except Exception as e:
-        console.print(f"[red]❌ Failed to save configuration: {e}[/red]")
-        sys.exit(1)
-
-def _prompt_for_task_model(default_provider: str) -> dict:
-    """Helper to prompt for task-specific model config."""
-    console.print("") # for spacing
-    provider = click.prompt(
-        "    Provider for this task",
-        type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
-        default=default_provider,
-    )
-    model = click.prompt(f"    Model for this task")
-    return {"provider": provider, "model": model}
-
-def _init_huggingface(config_data: dict, model: Optional[str]):
-    """Initialize HuggingFace configuration."""
-    available_models = get_available_models()
-    if not available_models:
-        console.print("[red]❌ No HuggingFace models available![/red]")
-        sys.exit(1)
-
-    console.print("\n[bold]Available Local Models:[/bold]")
-    model_table = Table(show_header=True, header_style="bold magenta")
-    model_table.add_column("Model", style="cyan", no_wrap=True)
-    model_table.add_column("Description")
-    for model_key in available_models:
-        model_info = CPU_MODEL_CONFIGS[model_key]
-        model_table.add_row(model_key, model_info["description"])
-    console.print(model_table)
-
-    if not model:
-        model = click.prompt(
-            "Select model", type=click.Choice(available_models), default="qwen2.5-coder-1.5b"
-        )
-    config_data["model"] = model
-    config_data["huggingface"] = {"model": model}
-
-
-def _init_api_provider(config_data: dict, provider: str, model: Optional[str]):
-    """Initialize API provider configuration."""
-    api_key = click.prompt(f"Enter {provider.capitalize()} API key", hide_input=True)
-    
-    if not model:
-        default_models = {
-            "gemini": "gemini-2.5-flash",
-            "anthropic": "claude-3-5-haiku-latest",
-            "openai": "gpt-5-mini-2025-08-07",
-        }
-        model = click.prompt(f"Enter {provider.capitalize()} model", default=default_models.get(provider, ""))
-        
-    config_data["model"] = model
-    config_data[provider] = {"model": model, "api_key": api_key}
+    init_command(ctx, provider, model, output_dir, force)
 
 
 @main.command()
@@ -248,15 +111,17 @@ def validate(ctx: click.Context):
     try:
         from ..core.llm_client import create_llm_client
 
-        with console.status("[bold green]Connecting to LLM..."):
+        with console.status("[bold green]Connecting to LLM...", spinner="dots") as status:
             client = create_llm_client(settings)
+            status.update("[bold green]LLM client created.[/bold green]")
 
         validation_table.add_row(
             "LLM Provider", "✅", f"Connected to {settings.provider}"
         )
 
-        with console.status("[bold green]Generating test response..."):
+        with console.status("[bold green]Generating test response...", spinner="dots") as status:
             test_response = client.generate_text("Say 'Hello from CommitLM!'", max_tokens=50)
+            status.update("[bold green]Test response received.[/bold green]")
 
         if test_response:
             validation_table.add_row(
@@ -386,14 +251,18 @@ def generate(
 
     if not diff_content:
         import subprocess
-        result = subprocess.run(["git", "diff", "--cached", "--quiet"])
-        if result.returncode == 0:
-            console.print("[yellow]⚠️ No changes added to commit (git add ...)[/yellow]")
+        try:
+            result = subprocess.run(["git", "diff", "--cached", "--quiet"])
+            if result.returncode == 0:
+                console.print("[yellow]⚠️ No changes added to commit (git add ...)[/yellow]")
+                sys.exit(1)
+            else:
+                # If there are staged changes, get the diff and proceed
+                diff_proc = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True)
+                diff_content = diff_proc.stdout
+        except FileNotFoundError:
+            console.print("[red]❌ Git is not installed or not in your PATH.[/red]")
             sys.exit(1)
-        else:
-            # If there are staged changes, get the diff and proceed
-            diff_proc = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True)
-            diff_content = diff_proc.stdout
 
     if not diff_content:
         console.print(
@@ -427,8 +296,9 @@ def generate(
             f"[blue]Using provider: {runtime_settings.provider}, model: {runtime_settings.model}[/blue]"
         )
 
-        with console.status("[bold green]Generating documentation..."):
+        with console.status("[bold green]Generating documentation...", spinner="dots") as status:
             documentation = client.generate_documentation(diff_content)
+            status.update("[bold green]Documentation generated.[/bold green]")
 
         if output:
             output_path = Path(output)
@@ -716,6 +586,13 @@ def _uninstall_hook_file(hook_name: str, signature: str, git_root: Path, debug: 
 def set_alias(ctx: click.Context):
     """Set a git alias for easy commit message generation."""
     console.print("[bold blue]Setting up git alias[/bold blue]")
+
+    import subprocess
+    try:
+        subprocess.run(["git", "--version"], capture_output=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        console.print("[red]❌ Git is not installed or not in your PATH.[/red]")
+        sys.exit(1)
 
     try:
         from git import Repo, GitCommandError

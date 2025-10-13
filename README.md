@@ -2,7 +2,7 @@
 
 **Automated Documentation Generation for Every Git Commit**
 
-AI-powered documentation generator that automatically creates comprehensive documentation from your git changes using local AI models. The main feature is automatic documentation generation through git post-commit hooks - every time you commit code, AI analyzes the changes and generates documentation in your `docs/` folder.
+CommitLM is an AI-powered tool that automatically generates documentation for your code changes and creates conventional commit messages for you. It integrates with Git to analyze your staged changes and provide documentation and commit messages, streamlining your workflow and improving your project's maintainability.
 
 ## Features
 
@@ -44,27 +44,11 @@ When you run `commitlm init`, you'll be guided through:
 
 Example interactive session:
 ```
-🚀 Initializing CommitLM
-
-Available Local Models:
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Model                    ┃ Size ┃ RAM Usage              ┃ Description                   ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┷━━━━━━┷━━━━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-
-Recommended: qwen2.5-coder-1.5b - Best overall performance to speed ratio
-Select model [qwen2.5-coder-1.5b]: 
-
-🧶 YaRN (Extended Context) Options:
-YaRN enables extended context length for processing larger git diffs.
-• Default context: 32,768 tokens
-• Extended context: 131,072 tokens
-Enable YaRN for extended context length? [y/N]: y
-
-📝 Output Length Configuration:
-YaRN enabled - can handle up to 131,072 input tokens
-• Recommended: 1024 tokens
-• Higher values = more detailed docs but slower generation
-Max output tokens [1024]: 1024
+? Select LLM provider › huggingface
+? Select model › qwen2.5-coder-1.5b
+? Which tasks do you want to enable? › both
+? Do you want to use different models for specific tasks? › No
+? Enable fallback to a local model if the API fails? › No
 ```
 
 **Model Options:**
@@ -232,24 +216,26 @@ Configuration is stored in `.commitlm-config.json`:
 
 ## Commands
 
-```bash
-commitlm init            # Initialize configuration (Step 2)
-commitlm install-hook    # Install git post-commit hook (Step 3 - Main feature)
-commitlm status          # Show current config and hardware info
-commitlm validate        # Test model connection
-commitlm generate TEXT   # Manual generation (debug/testing only)
-commitlm uninstall-hook  # Remove git post-commit hook
-commitlm --help          # Show all commands
-```
+### Primary Commands
 
-**Primary Commands:**
-- `commitlm init` → Set up your AI model and configuration
-- `commitlm install-hook` → **Enable automatic documentation** (this is what you want!)
-- `commitlm status` → Check everything is working
+| Command | Description |
+| --- | --- |
+| `commitlm init` | Initializes the project with an interactive setup guide. |
+| `commitlm install-hook` | Installs the Git hooks for automation. |
+| `commitlm status` | Shows the current configuration and hardware status. |
+| `commitlm validate` | Validates the configuration and tests the LLM connection. |
 
-**Debug Commands:**
-- `commitlm generate` → Test documentation generation manually
-- `commitlm validate` → Test AI model is loading correctly
+### Secondary Commands
+
+| Command | Description |
+| --- | --- |
+| `commitlm generate` | Manually generate a commit message or documentation. |
+| `commitlm uninstall-hook` | Removes the Git hooks. |
+| `commitlm set-alias` | Sets up a Git alias for easier commit message generation. |
+| `commitlm config get [KEY]` | Gets a configuration value. |
+| `commitlm config set <KEY> <VALUE>` | Sets a configuration value. |
+| `commitlm config change-model <TASK>` | Changes the model for a specific task. |
+| `commitlm enable-task` | Enables or disables tasks. |
 
 ## Troubleshooting
 
