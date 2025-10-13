@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from ..config.settings import init_settings, CPU_MODEL_CONFIGS
+from ..config.settings import init_settings, CPU_MODEL_CONFIGS, TaskSettings
 from ..core.llm_client import LLMClientError, get_available_models
 
 console = Console()
@@ -121,12 +121,20 @@ def init(
     else:
         _init_api_provider(config_data, provider, model)
 
+    enabled_tasks = click.prompt(
+        "Which tasks do you want to enable?",
+        type=click.Choice(["commit_message", "doc_generation", "both"]),
+        default="both"
+    )
+    config_data["commit_message_enabled"] = enabled_tasks in ["commit_message", "both"]
+    config_data["doc_generation_enabled"] = enabled_tasks in ["doc_generation", "both"]
+
     if click.confirm("\nDo you want to use different models for specific tasks?", default=False):
-        if click.confirm("  - Configure a specific model for commit message generation?", default=True):
+        if config_data["commit_message_enabled"] and click.confirm("  - Configure a specific model for commit message generation?", default=True):
             task_config = _prompt_for_task_model(provider)
             config_data["commit_message"] = task_config
 
-        if click.confirm("  - Configure a specific model for documentation generation?", default=True):
+        if config_data["doc_generation_enabled"] and click.confirm("  - Configure a specific model for documentation generation?", default=True):
             task_config = _prompt_for_task_model(provider)
             config_data["doc_generation"] = task_config
 
@@ -142,10 +150,19 @@ def init(
 
         # Automatically run install-hook
         console.print("\n[bold]Next Step: Installing Git Hooks[/bold]")
-        ctx.invoke(install_hook, force=force)
+        hook_type = "none"
+        if config_data["commit_message_enabled"] and config_data["doc_generation_enabled"]:
+            hook_type = "both"
+        elif config_data["commit_message_enabled"]:
+            hook_type = "message"
+        elif config_data["doc_generation_enabled"]:
+            hook_type = "docs"
+        
+        if hook_type != "none":
+            ctx.invoke(install_hook, hook_type=hook_type, force=force)
 
         # Prompt to set up alias
-        if click.confirm("\nWould you like to set up a git alias for easier commits?"):
+        if config_data["commit_message_enabled"] and click.confirm("\nWould you like to set up a git alias for easier commits?"):
             ctx.invoke(set_alias)
         else:
             console.print("\nTo generate a commit message, you can run:")
@@ -474,6 +491,90 @@ def config_set(ctx: click.Context, key: str, value: str):
 
     settings.save_to_file(ctx.obj["config_path"])
     console.print(f"[green]Set '{key}' to '{converted_value}'[/green]")
+
+@config.command("change-model")
+@click.argument("task", type=click.Choice(["commit_message", "doc_generation", "default"]))
+@click.pass_context
+def change_model(ctx: click.Context, task: str):
+    """Change the model for a specific task."""
+    settings = ctx.obj["settings"]
+    
+    if task == "default":
+        provider = click.prompt(
+            "Select LLM provider",
+            type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
+            default=settings.provider,
+        )
+        model = click.prompt("Enter the model name", default=settings.model)
+        settings.provider = provider
+        settings.model = model
+    else:
+        task_settings = getattr(settings, task, None)
+        if not task_settings:
+            task_settings = TaskSettings()
+            setattr(settings, task, task_settings)
+            
+        default_provider = task_settings.provider if task_settings.provider else settings.provider
+        default_model = task_settings.model if task_settings.model else settings.model
+        
+        provider = click.prompt(
+            f"Select LLM provider for {task}",
+            type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
+            default=default_provider,
+        )
+        model = click.prompt(f"Enter the model name for {task}", default=default_model)
+        
+        task_settings.provider = provider
+        task_settings.model = model
+
+    settings.save_to_file(ctx.obj["config_path"])
+    console.print(f"[green]✅ Model for '{task}' updated successfully.[/green]")
+
+@main.command("enable-task")
+@click.pass_context
+def enable_task(ctx: click.Context):
+    """Enable or disable tasks and configure their models."""
+    settings = ctx.obj["settings"]
+
+    enabled_tasks = click.prompt(
+        "Which tasks do you want to enable?",
+        type=click.Choice(["commit_message", "doc_generation", "both"]),
+        default="both"
+    )
+    settings.commit_message_enabled = enabled_tasks in ["commit_message", "both"]
+    settings.doc_generation_enabled = enabled_tasks in ["doc_generation", "both"]
+
+    if click.confirm("\nDo you want to use different models for the enabled tasks?", default=False):
+        if settings.commit_message_enabled and click.confirm("  - Configure a specific model for commit message generation?", default=True):
+            task_config = _prompt_for_task_model(settings.provider)
+            settings.commit_message = TaskSettings(**task_config)
+
+        if settings.doc_generation_enabled and click.confirm("  - Configure a specific model for documentation generation?", default=True):
+            task_config = _prompt_for_task_model(settings.provider)
+            settings.doc_generation = TaskSettings(**task_config)
+    else:
+        # Reset task-specific models if user chooses not to use them
+        settings.commit_message = None
+        settings.doc_generation = None
+
+    settings.save_to_file(ctx.obj["config_path"])
+    console.print("[green]✅ Tasks enabled and configured successfully.[/green]")
+
+    # Also need to reinstall hooks
+    console.print("\n[bold]Re-installing Git Hooks based on new settings...[/bold]")
+    hook_type = "none"
+    if settings.commit_message_enabled and settings.doc_generation_enabled:
+        hook_type = "both"
+    elif settings.commit_message_enabled:
+        hook_type = "message"
+    elif settings.doc_generation_enabled:
+        hook_type = "docs"
+    
+    if hook_type != "none":
+        ctx.invoke(install_hook, hook_type=hook_type, force=True)
+    else:
+        # if no tasks are enabled, we should probably uninstall all hooks
+        ctx.invoke(uninstall_hook)
 
 
 @main.command()

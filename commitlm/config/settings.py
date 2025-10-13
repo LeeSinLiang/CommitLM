@@ -337,6 +337,9 @@ class Settings(BaseModel):
     documentation: DocumentationConfig = DocumentationConfig()
     fallback_to_local: bool = False
 
+    commit_message_enabled: bool = Field(default=False, description="Enable commit message generation")
+    doc_generation_enabled: bool = Field(default=False, description="Enable documentation generation")
+
     commit_message: Optional[TaskSettings] = None
     doc_generation: Optional[TaskSettings] = None
 
