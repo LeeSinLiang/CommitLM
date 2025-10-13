@@ -27,6 +27,7 @@ def init_command(
     console.print("[bold blue]🚀 Initializing CommitLM[/bold blue]")
 
     from ..utils.helpers import get_git_root
+
     git_root = get_git_root()
 
     if git_root:
@@ -35,7 +36,9 @@ def init_command(
         console.print(f"[blue]💾 Configuration will be saved to: {config_path}[/blue]")
     else:
         config_path = Path(".commitlm-config.json")
-        console.print("[yellow]⚠️  No git repository detected. Saving config in current directory.[/yellow]")
+        console.print(
+            "[yellow]⚠️  No git repository detected. Saving config in current directory.[/yellow]"
+        )
 
     if config_path.exists() and not force:
         questions = [
@@ -159,7 +162,10 @@ def init_command(
         # Automatically run install-hook
         console.print("\n[bold]Next Step: Installing Git Hooks[/bold]")
         hook_type = "none"
-        if config_data["commit_message_enabled"] and config_data["doc_generation_enabled"]:
+        if (
+            config_data["commit_message_enabled"]
+            and config_data["doc_generation_enabled"]
+        ):
             hook_type = "both"
         elif config_data["commit_message_enabled"]:
             hook_type = "message"
@@ -168,6 +174,7 @@ def init_command(
 
         if hook_type != "none":
             from .commands import install_hook
+
             ctx.invoke(install_hook, hook_type=hook_type, force=force)
 
         # Prompt to set up alias
@@ -182,13 +189,21 @@ def init_command(
             }
         ]
         answers = prompt(questions)
-        if config_data["commit_message_enabled"] and answers.get("setup_alias") == "Yes":
+        if (
+            config_data["commit_message_enabled"]
+            and answers.get("setup_alias") == "Yes"
+        ):
             from .commands import set_alias
+
             ctx.invoke(set_alias)
         else:
             console.print("\nTo generate a commit message, you can run:")
-            console.print("[bold cyan]git diff --cached | commitlm generate --short-message[/bold cyan]")
-            console.print("\nYou can set up an alias for this command later by running:")
+            console.print(
+                "[bold cyan]git diff --cached | commitlm generate --short-message[/bold cyan]"
+            )
+            console.print(
+                "\nYou can set up an alias for this command later by running:"
+            )
             console.print("[bold cyan]commitlm set-alias[/bold cyan]")
 
     except Exception as e:

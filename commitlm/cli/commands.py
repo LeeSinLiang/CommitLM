@@ -1,7 +1,6 @@
 """Command-line interface for AI docs generator."""
 
 import sys
-import json
 from pathlib import Path
 from typing import Optional, Union
 
@@ -11,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from ..config.settings import init_settings, CPU_MODEL_CONFIGS, TaskSettings
+from ..config.settings import init_settings, TaskSettings
 from ..core.llm_client import LLMClientError, get_available_models
 from .init_command import init_command
 
@@ -35,23 +34,21 @@ def main(
         sys.exit(0)
 
     ctx.ensure_object(dict)
-    
+
     # Auto-detect git root for settings loading
     from ..utils.helpers import get_git_root
-    
+
     if config:
         config_path = Path(config)
     else:
         git_root = get_git_root()
         config_path = (git_root / ".commitlm-config.json") if git_root else None
-    
+
     ctx.obj["config_path"] = config_path
     ctx.obj["verbose"] = verbose
     ctx.obj["debug"] = debug
     try:
-        settings = init_settings(
-            config_path=ctx.obj["config_path"]
-        )
+        settings = init_settings(config_path=ctx.obj["config_path"])
         ctx.obj["settings"] = settings
     except Exception as e:
         console.print(f"[red]Error initializing settings: {e}[/red]")
@@ -112,7 +109,9 @@ def validate(ctx: click.Context):
     try:
         from ..core.llm_client import create_llm_client
 
-        with console.status("[bold green]Connecting to LLM...", spinner="dots") as status:
+        with console.status(
+            "[bold green]Connecting to LLM...", spinner="dots"
+        ) as status:
             client = create_llm_client(settings)
             status.update("[bold green]LLM client created.[/bold green]")
 
@@ -120,8 +119,12 @@ def validate(ctx: click.Context):
             "LLM Provider", "✅", f"Connected to {settings.provider}"
         )
 
-        with console.status("[bold green]Generating test response...", spinner="dots") as status:
-            test_response = client.generate_text("Say 'Hello from CommitLM!'", max_tokens=50)
+        with console.status(
+            "[bold green]Generating test response...", spinner="dots"
+        ) as status:
+            test_response = client.generate_text(
+                "Say 'Hello from CommitLM!'", max_tokens=50
+            )
             status.update("[bold green]Test response received.[/bold green]")
 
         if test_response:
@@ -132,9 +135,9 @@ def validate(ctx: click.Context):
                 "Test Response",
                 "✅",
                 (
-                    test_response[:50].replace('\n', ' ') + "..."
+                    test_response[:50].replace("\n", " ") + "..."
                     if len(test_response) > 50
-                    else test_response.replace('\n', ' ')
+                    else test_response.replace("\n", " ")
                 ),
             )
         else:
@@ -196,7 +199,9 @@ def status(ctx: click.Context):
             )
         hf_config = settings.get_active_llm_config()
         device_info = hf_config.get_device_info()
-        device_status = f"{device_info['device'].upper()} ({device_info['acceleration']})"
+        device_status = (
+            f"{device_info['device'].upper()} ({device_info['acceleration']})"
+        )
         if device_info.get("gpu_name"):
             device_status += f" - {device_info['gpu_name']}"
         status_table.add_row("Hardware", "🚀", device_status)
@@ -252,14 +257,19 @@ def generate(
 
     if not diff_content:
         import subprocess
+
         try:
             result = subprocess.run(["git", "diff", "--cached", "--quiet"])
             if result.returncode == 0:
-                console.print("[yellow]⚠️ No changes added to commit (git add ...)[/yellow]")
+                console.print(
+                    "[yellow]⚠️ No changes added to commit (git add ...)[/yellow]"
+                )
                 sys.exit(1)
             else:
                 # If there are staged changes, get the diff and proceed
-                diff_proc = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True)
+                diff_proc = subprocess.run(
+                    ["git", "diff", "--cached"], capture_output=True, text=True
+                )
                 diff_content = diff_proc.stdout
         except FileNotFoundError:
             console.print("[red]❌ Git is not installed or not in your PATH.[/red]")
@@ -297,7 +307,9 @@ def generate(
             f"[blue]Using provider: {runtime_settings.provider}, model: {runtime_settings.model}[/blue]"
         )
 
-        with console.status("[bold green]Generating documentation...", spinner="dots") as status:
+        with console.status(
+            "[bold green]Generating documentation...", spinner="dots"
+        ) as status:
             documentation = client.generate_documentation(diff_content)
             status.update("[bold green]Documentation generated.[/bold green]")
 
@@ -334,7 +346,7 @@ def config_get(ctx: click.Context, key: Optional[str]):
     """Get a configuration value."""
     settings = ctx.obj["settings"]
     if key:
-        keys = key.split('.')
+        keys = key.split(".")
         value = settings
         for k in keys:
             if isinstance(value, dict):
@@ -356,10 +368,14 @@ def config_get(ctx: click.Context, key: Optional[str]):
 def config_set(ctx: click.Context, key: str, value: str):
     """Set a configuration value."""
     settings = ctx.obj["settings"]
-    keys = key.split('.')
+    keys = key.split(".")
     s = settings
     for k in keys[:-1]:
-        s = getattr(s, k)
+        try:
+            s = getattr(s, k)
+        except AttributeError:
+            console.print(f"[red]Configuration key '{key}' not found.[/red]")
+            return
 
     # Try to convert value to the correct type
     converted_value: Union[str, bool, int, float] = value
@@ -372,20 +388,23 @@ def config_set(ctx: click.Context, key: str, value: str):
         elif isinstance(current_value, float):
             converted_value = float(value)
     except Exception:
-        pass # Keep as string if conversion fails
+        pass  # Keep as string if conversion fails
 
     setattr(s, keys[-1], converted_value)
 
     settings.save_to_file(ctx.obj["config_path"])
     console.print(f"[green]Set '{key}' to '{converted_value}'[/green]")
 
+
 @config.command("change-model")
-@click.argument("task", type=click.Choice(["commit_message", "doc_generation", "default"]))
+@click.argument(
+    "task", type=click.Choice(["commit_message", "doc_generation", "default"])
+)
 @click.pass_context
 def change_model(ctx: click.Context, task: str):
     """Change the model for a specific task."""
     settings = ctx.obj["settings"]
-    
+
     if task == "default":
         questions = [
             {
@@ -402,7 +421,7 @@ def change_model(ctx: click.Context, task: str):
                 "name": "model",
                 "default": settings.model,
                 "qmark": "",
-            }
+            },
         ]
         answers = prompt(questions)
         provider = answers.get("provider")
@@ -414,10 +433,12 @@ def change_model(ctx: click.Context, task: str):
         if not task_settings:
             task_settings = TaskSettings()
             setattr(settings, task, task_settings)
-            
-        default_provider = task_settings.provider if task_settings.provider else settings.provider
+
+        default_provider = (
+            task_settings.provider if task_settings.provider else settings.provider
+        )
         default_model = task_settings.model if task_settings.model else settings.model
-        
+
         questions = [
             {
                 "type": "list",
@@ -433,17 +454,18 @@ def change_model(ctx: click.Context, task: str):
                 "name": "model",
                 "default": default_model,
                 "qmark": "",
-            }
+            },
         ]
         answers = prompt(questions)
         provider = answers.get("provider")
         model = answers.get("model")
-        
+
         task_settings.provider = provider
         task_settings.model = model
 
     settings.save_to_file(ctx.obj["config_path"])
     console.print(f"[green]✅ Model for '{task}' updated successfully.[/green]")
+
 
 @main.command("enable-task")
 @click.pass_context
@@ -493,6 +515,7 @@ def enable_task(ctx: click.Context):
             answers = prompt(questions)
             if answers.get("config_commit_msg_model") == "Yes":
                 from .init_command import _prompt_for_task_model
+
                 task_config = _prompt_for_task_model(settings.provider)
                 settings.commit_message = TaskSettings(**task_config)
 
@@ -510,6 +533,7 @@ def enable_task(ctx: click.Context):
             answers = prompt(questions)
             if answers.get("config_doc_gen_model") == "Yes":
                 from .init_command import _prompt_for_task_model
+
                 task_config = _prompt_for_task_model(settings.provider)
                 settings.doc_generation = TaskSettings(**task_config)
     else:
@@ -529,7 +553,7 @@ def enable_task(ctx: click.Context):
         hook_type = "message"
     elif settings.doc_generation_enabled:
         hook_type = "docs"
-    
+
     if hook_type != "none":
         ctx.invoke(install_hook, hook_type=hook_type, force=True)
     else:
@@ -538,12 +562,13 @@ def enable_task(ctx: click.Context):
 
 
 @main.command()
-@click.argument("hook_type", type=click.Choice(["message", "docs", "both"]), default="both")
+@click.argument(
+    "hook_type", type=click.Choice(["message", "docs", "both"]), default="both"
+)
 @click.option("--force", is_flag=True, help="Overwrite existing hook(s)")
 @click.pass_context
 def install_hook(ctx: click.Context, hook_type: str, force: bool):
     """Install git hooks for automation."""
-    from ..integrations.git_client import get_git_client, GitClientError
     from ..utils.helpers import get_git_root
 
     console.print("[bold blue]🔗 Installing Git Hooks[/bold blue]")
@@ -561,9 +586,11 @@ def install_hook(ctx: click.Context, hook_type: str, force: bool):
     if hook_type in ["docs", "both"]:
         _install_post_commit_hook(force)
 
+
 def _install_prepare_commit_msg_hook(force: bool):
     """Install the prepare-commit-msg hook."""
-    from ..integrations.git_client import get_git_client, GitClientError
+    from ..integrations.git_client import get_git_client
+
     git_client = get_git_client()
     hooks_dir = git_client.repo_path / ".git" / "hooks"
     hook_file = hooks_dir / "prepare-commit-msg"
@@ -583,20 +610,25 @@ def _install_prepare_commit_msg_hook(force: bool):
             console.print("[yellow]Installation cancelled.[/yellow]")
             return
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp_file:
         hook_script_path = Path(tmp_file.name)
     if git_client.create_prepare_commit_msg_hook_script(hook_script_path):
         if git_client.install_prepare_commit_msg_hook(hook_script_path):
-            console.print(f"[green]✅ prepare-commit-msg hook installed successfully![/green]")
+            console.print(
+                "[green]✅ prepare-commit-msg hook installed successfully![/green]"
+            )
         else:
             console.print("[red]❌ Failed to install prepare-commit-msg hook[/red]")
     else:
         console.print("[red]❌ Failed to create hook script[/red]")
     hook_script_path.unlink(missing_ok=True)
 
+
 def _install_post_commit_hook(force: bool):
     """Install the post-commit hook."""
-    from ..integrations.git_client import get_git_client, GitClientError
+    from ..integrations.git_client import get_git_client
+
     git_client = get_git_client()
     hooks_dir = git_client.repo_path / ".git" / "hooks"
     hook_file = hooks_dir / "post-commit"
@@ -616,11 +648,12 @@ def _install_post_commit_hook(force: bool):
             console.print("[yellow]Installation cancelled.[/yellow]")
             return
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp_file:
         hook_script_path = Path(tmp_file.name)
     if git_client.create_post_commit_hook_script(hook_script_path):
         if git_client.install_post_commit_hook(hook_script_path):
-            console.print(f"[green]✅ post-commit hook installed successfully![/green]")
+            console.print("[green]✅ post-commit hook installed successfully![/green]")
         else:
             console.print("[red]❌ Failed to install post-commit hook[/red]")
     else:
@@ -643,8 +676,18 @@ def uninstall_hook(ctx: click.Context):
 
     console.print(f"[blue]📁 Git repository detected at: {git_root}[/blue]")
 
-    _uninstall_hook_file("post-commit", "CommitLM Generator Post-Commit Hook", git_root, ctx.obj.get("debug", False))
-    _uninstall_hook_file("prepare-commit-msg", "CommitLM-prepare-commit-msg", git_root, ctx.obj.get("debug", False))
+    _uninstall_hook_file(
+        "post-commit",
+        "CommitLM Generator Post-Commit Hook",
+        git_root,
+        ctx.obj.get("debug", False),
+    )
+    _uninstall_hook_file(
+        "prepare-commit-msg",
+        "CommitLM-prepare-commit-msg",
+        git_root,
+        ctx.obj.get("debug", False),
+    )
 
 
 def _uninstall_hook_file(hook_name: str, signature: str, git_root: Path, debug: bool):
@@ -695,6 +738,7 @@ def set_alias(ctx: click.Context):
     console.print("[bold blue]Setting up git alias[/bold blue]")
 
     import subprocess
+
     try:
         subprocess.run(["git", "--version"], capture_output=True, check=True)
     except (FileNotFoundError, subprocess.CalledProcessError):
@@ -704,6 +748,7 @@ def set_alias(ctx: click.Context):
     try:
         from git import Repo, GitCommandError
         import os
+
         repo = Repo(os.getcwd(), search_parent_directories=True)
     except (GitCommandError, ImportError):
         console.print("[red]Not in a git repository or gitpython not installed.[/red]")
@@ -740,12 +785,16 @@ def set_alias(ctx: click.Context):
             console.print("[yellow]Alias setup cancelled.[/yellow]")
             return
 
-    alias_command = "!git diff --cached | commitlm generate --short-message | git commit -F -"
-    with repo.config_writer(config_level='global') as cw:
+    alias_command = (
+        "!git diff --cached | commitlm generate --short-message | git commit -F -"
+    )
+    with repo.config_writer(config_level="global") as cw:
         cw.set_value("alias", alias_name, alias_command)
 
     console.print(f"[green]✅ Alias '{alias_name}' set successfully.[/green]")
-    console.print(f"You can now use 'git {alias_name}' to commit with a generated message.")
+    console.print(
+        f"You can now use 'git {alias_name}' to commit with a generated message."
+    )
 
 
 if __name__ == "__main__":
