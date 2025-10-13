@@ -345,9 +345,25 @@ fi
 # Create docs directory if it doesn't exist
 mkdir -p docs
 
-# Generate timestamp for filename
-TIMESTAMP="$(date +"%Y%m%d_%H%M%S")"
-DOC_FILENAME="docs/commit_${COMMIT_SHORT}_${TIMESTAMP}.md"
+# Sanitize commit message for use in filename
+# Convert to lowercase, replace spaces with hyphens, remove special chars, truncate
+SANITIZED_MSG=$(echo "$COMMIT_MSG" | \\
+    tr '[:upper:]' '[:lower:]' | \\
+    sed 's/[^a-z0-9 -]//g' | \\
+    sed 's/ /-/g' | \\
+    sed 's/--*/-/g' | \\
+    cut -c1-50)
+
+# Remove trailing hyphens
+SANITIZED_MSG=$(echo "$SANITIZED_MSG" | sed 's/-*$//')
+
+# Fallback to "unnamed" if sanitization results in empty string
+if [ -z "$SANITIZED_MSG" ]; then
+    SANITIZED_MSG="unnamed"
+fi
+
+# Generate filename with sanitized message and short hash for uniqueness
+DOC_FILENAME="docs/commit_${SANITIZED_MSG}_${COMMIT_SHORT}.md"
 
 # Use commitlm global command
 commitlm generate \\
