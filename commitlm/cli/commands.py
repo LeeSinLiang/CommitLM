@@ -185,7 +185,24 @@ def status(ctx: click.Context):
     status_table.add_column("Details")
 
     status_table.add_row("LLM Provider", "✅", settings.provider)
-    status_table.add_row("Active Model", "✅", settings.model)
+    status_table.add_row("Default Model", "✅", settings.model)
+
+    # Show task-specific models if configured
+    if settings.commit_message_enabled and settings.commit_message:
+        commit_provider = settings.commit_message.provider or settings.provider
+        commit_model = settings.commit_message.model or settings.model
+        status_table.add_row(
+            "Commit Message Model",
+            "✅",
+            f"{commit_provider}/{commit_model}",
+        )
+
+    if settings.doc_generation_enabled and settings.doc_generation:
+        doc_provider = settings.doc_generation.provider or settings.provider
+        doc_model = settings.doc_generation.model or settings.model
+        status_table.add_row(
+            "Documentation Model", "✅", f"{doc_provider}/{doc_model}"
+        )
 
     if settings.provider == "huggingface":
         available_models = get_available_models()
