@@ -443,9 +443,10 @@ def generate(
             )
 
     except Exception as e:
-        console.print(f"[red]Failed to generate documentation: {e}[/red]")
+        err_console = Console(file=sys.stderr)
+        err_console.print(f"[red]Failed to generate documentation: {e}[/red]")
         if ctx.obj["debug"]:
-            console.print_exception()
+            err_console.print_exception()
         sys.exit(1)
 
 
