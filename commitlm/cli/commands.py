@@ -129,7 +129,7 @@ def validate(ctx: click.Context):
 
         if test_response:
             validation_table.add_row(
-                "Model Connection", "✅", f"Using model: {settings.model}"
+                "Model Connection", "✅", f"Default model: {settings.model}"
             )
             validation_table.add_row(
                 "Test Response",
@@ -147,6 +147,86 @@ def validate(ctx: click.Context):
         validation_table.add_row("Model Connection", "❌", str(e))
     except Exception as e:
         validation_table.add_row("Model Connection", "❌", f"Unexpected error: {e}")
+
+    # Test diff for validating task-specific generation
+    TEST_DIFF = """diff --git a/test.py b/test.py
+new file mode 100644
+index 0000000..f301245
+--- /dev/null
++++ b/test.py
+@@ -0,0 +1 @@
++print("Hello World")
+"""
+
+    # Test commit message generation if enabled
+    if settings.commit_message_enabled:
+        try:
+            # Get task-specific model info
+            task_settings = settings.commit_message
+            if task_settings and (task_settings.provider or task_settings.model):
+                commit_provider = task_settings.provider or settings.provider
+                commit_model = task_settings.model or settings.model
+                model_prefix = f"[cyan]{commit_provider}/{commit_model}:[/cyan] "
+            else:
+                model_prefix = ""
+
+            with console.status(
+                "[bold green]Testing commit message generation...", spinner="dots"
+            ) as status:
+                commit_client = create_llm_client(settings, task="commit_message")
+                commit_msg = commit_client.generate_short_message(TEST_DIFF)
+                status.update("[bold green]Commit message test passed.[/bold green]")
+
+            # Format output with model prefix if task-specific
+            output = model_prefix + commit_msg
+            validation_table.add_row(
+                "Commit Message Generation",
+                "✅",
+                (
+                    output[:60].replace("\n", " ") + "..."
+                    if len(output) > 60
+                    else output.replace("\n", " ")
+                ),
+            )
+        except Exception as e:
+            validation_table.add_row("Commit Message Generation", "❌", str(e))
+    else:
+        validation_table.add_row("Commit Message Generation", "⚠️", "Disabled")
+
+    # Test documentation generation if enabled
+    if settings.doc_generation_enabled:
+        try:
+            # Get task-specific model info
+            task_settings = settings.doc_generation
+            if task_settings and (task_settings.provider or task_settings.model):
+                doc_provider = task_settings.provider or settings.provider
+                doc_model = task_settings.model or settings.model
+                model_prefix = f"[cyan]{doc_provider}/{doc_model}:[/cyan] "
+            else:
+                model_prefix = ""
+
+            with console.status(
+                "[bold green]Testing documentation generation...", spinner="dots"
+            ) as status:
+                doc_client = create_llm_client(settings, task="doc_generation")
+                doc = doc_client.generate_documentation(TEST_DIFF)
+                status.update("[bold green]Documentation test passed.[/bold green]")
+
+            # Format output with model prefix if task-specific
+            output = model_prefix + doc
+            validation_table.add_row(
+                "Documentation Generation",
+                "✅",
+                (
+                    output[:60].replace("\n", " ") + "..."
+                    if len(output) > 60
+                    else output.replace("\n", " ")
+                ),
+            )
+        except Exception as e:
+            validation_table.add_row("Documentation Generation", "❌", str(e))
+    else:
+        validation_table.add_row("Documentation Generation", "⚠️", "Disabled")
 
     output_dir = Path(settings.documentation.output_dir)
     if output_dir.exists():
@@ -321,7 +401,9 @@ def generate(
 
             # Display header with model information to stderr (won't be captured by git hook)
             err_console = Console(file=sys.stderr)
-            err_console.print("[bold blue]CommitLM: generate commit message[/bold blue]")
+            err_console.print(
+                "[bold blue]CommitLM: generate commit message[/bold blue]"
+            )
             err_console.print(
                 f"[blue]Using provider: {actual_provider}, model: {actual_model}[/blue]"
             )
