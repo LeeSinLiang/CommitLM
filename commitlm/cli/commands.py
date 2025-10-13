@@ -200,9 +200,7 @@ def status(ctx: click.Context):
     if settings.doc_generation_enabled and settings.doc_generation:
         doc_provider = settings.doc_generation.provider or settings.provider
         doc_model = settings.doc_generation.model or settings.model
-        status_table.add_row(
-            "Documentation Model", "✅", f"{doc_provider}/{doc_model}"
-        )
+        status_table.add_row("Documentation Model", "✅", f"{doc_provider}/{doc_model}")
 
     if settings.provider == "huggingface":
         available_models = get_available_models()
@@ -312,16 +310,41 @@ def generate(
             runtime_settings = Settings(**settings_dict)
 
         if short_message:
+            # Get the actual provider/model that will be used for commit message generation
+            task_settings = settings.commit_message
+            if task_settings and (task_settings.provider or task_settings.model):
+                actual_provider = task_settings.provider or runtime_settings.provider
+                actual_model = task_settings.model or runtime_settings.model
+            else:
+                actual_provider = runtime_settings.provider
+                actual_model = runtime_settings.model
+
+            # Display header with model information to stderr (won't be captured by git hook)
+            err_console = Console(file=sys.stderr)
+            err_console.print("[bold blue]CommitLM: generate commit message[/bold blue]")
+            err_console.print(
+                f"[blue]Using provider: {actual_provider}, model: {actual_model}[/blue]"
+            )
+
             client = create_llm_client(runtime_settings, task="commit_message")
-            # When generating a short message for the hook, just print the raw text
+            # When generating a short message for the hook, just print the raw text to stdout
             message = client.generate_short_message(diff_content)
             print(message)
             sys.exit(0)
         else:
+            # Get the actual provider/model that will be used for doc generation
+            task_settings = settings.doc_generation
+            if task_settings and (task_settings.provider or task_settings.model):
+                actual_provider = task_settings.provider or runtime_settings.provider
+                actual_model = task_settings.model or runtime_settings.model
+            else:
+                actual_provider = runtime_settings.provider
+                actual_model = runtime_settings.model
+
             client = create_llm_client(runtime_settings, task="doc_generation")
 
         console.print(
-            f"[blue]Using provider: {runtime_settings.provider}, model: {runtime_settings.model}[/blue]"
+            f"[blue]Using provider: {actual_provider}, model: {actual_model}[/blue]"
         )
 
         with console.status(
