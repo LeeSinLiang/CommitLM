@@ -18,6 +18,7 @@ except ImportError:
     torch = None
 
 from google import genai
+from google.api_core import exceptions as google_exceptions
 from google.genai import types
 import anthropic
 import openai
@@ -438,9 +439,8 @@ Documentation generation encountered an issue. Please check the model configurat
         # Use a smaller max_tokens for commit messages
         response = self.generate_text(prompt, max_tokens=50, **kwargs)
 
-        # If generate_text fails, it returns the doc fallback. Check for it.
         if response.startswith("# Code Changes"):
-            return self._generate_short_message_fallback()
+            raise LLMClientError("Failed to generate commit message.")
 
         # Clean up response to ensure it's a single line
         return response.strip().split("\n")[0]
@@ -541,6 +541,9 @@ class GeminiClient(LLMClient):
                 logger.error(f"Empty response from Gemini. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'Unknown'}")
                 return self._generate_fallback()
             return response.text
+        except google_exceptions.PermissionDenied as e:
+            logger.error(f"Gemini API key is invalid: {e}")
+            raise LLMClientError("Gemini API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
         except Exception as e:
             logger.error(f"Gemini API call failed: {e}")
             return self._generate_fallback()
@@ -563,7 +566,7 @@ class GeminiClient(LLMClient):
         response = self.generate_text(prompt, max_tokens=50, **kwargs)
 
         if response.startswith("# Code Changes"):
-            return self._generate_short_message_fallback()
+            raise LLMClientError("Failed to generate commit message.")
 
         return response.strip().split("\n")[0]
 
@@ -607,6 +610,12 @@ class AnthropicClient(LLMClient):
                 messages=[{"role": "user", "content": prompt}],
             )
             return message.content[0].text
+        except anthropic.APIStatusError as e:
+            if e.status_code == 401:
+                logger.error(f"Anthropic API key is invalid: {e}")
+                raise LLMClientError("Anthropic API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
+            logger.error(f"Anthropic API call failed: {e}")
+            return self._generate_fallback()
         except Exception as e:
             logger.error(f"Anthropic API call failed: {e}")
             return self._generate_fallback()
@@ -673,6 +682,9 @@ class OpenAIClient(LLMClient):
                 temperature=self.config.temperature,
             )
             return response.choices[0].message.content or ""
+        except openai.AuthenticationError as e:
+            logger.error(f"OpenAI API key is invalid: {e}")
+            raise LLMClientError("OpenAI API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
         except Exception as e:
             logger.error(f"OpenAI API call failed: {e}")
             return self._generate_fallback()

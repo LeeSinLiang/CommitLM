@@ -380,6 +380,21 @@ def generate(
     elif not diff_content and not sys.stdin.isatty():
         diff_content = sys.stdin.read()
 
+    # If diff_content is an empty string (from stdin), treat it as no content.
+    if diff_content is not None and not diff_content.strip():
+        diff_content = None
+
+    if not diff_content:
+        import subprocess
+        result = subprocess.run(["git", "diff", "--cached", "--quiet"])
+        if result.returncode == 0:
+            console.print("[yellow]⚠️ No changes added to commit (git add ...)[/yellow]")
+            sys.exit(1)
+        else:
+            # If there are staged changes, get the diff and proceed
+            diff_proc = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True)
+            diff_content = diff_proc.stdout
+
     if not diff_content:
         console.print(
             "[red]❌ Please provide diff content via argument, file, or stdin.[/red]"
