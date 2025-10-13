@@ -135,6 +135,10 @@ def init(
         console.print("\n[bold]Next Step: Installing Git Hooks[/bold]")
         ctx.invoke(install_hook, force=force)
 
+        # Prompt to set up alias
+        if click.confirm("\nWould you like to set up a git alias for easier commits?"):
+            ctx.invoke(set_alias)
+
     except Exception as e:
         console.print(f"[red]❌ Failed to save configuration: {e}[/red]")
         sys.exit(1)
@@ -448,9 +452,10 @@ def config_set(ctx: click.Context, key: str, value: str):
 
 
 @main.command()
+@click.argument("hook_type", type=click.Choice(["message", "docs", "both"]), default="both")
 @click.option("--force", is_flag=True, help="Overwrite existing hook(s)")
 @click.pass_context
-def install_hook(ctx: click.Context, force: bool):
+def install_hook(ctx: click.Context, hook_type: str, force: bool):
     """Install git hooks for automation."""
     from ..integrations.git_client import get_git_client, GitClientError
     from ..utils.helpers import get_git_root
@@ -464,18 +469,10 @@ def install_hook(ctx: click.Context, force: bool):
 
     console.print(f"[blue]📁 Git repository detected at: {git_root}[/blue]")
 
-    hook_choice = click.prompt(
-        "Which hook do you want to install?",
-        type=click.Choice(
-            ["message", "docs", "both"], case_sensitive=False
-        ),
-        default="both",
-    )
-
-    if hook_choice in ["message", "both"]:
+    if hook_type in ["message", "both"]:
         _install_prepare_commit_msg_hook(force)
 
-    if hook_choice in ["docs", "both"]:
+    if hook_type in ["docs", "both"]:
         _install_post_commit_hook(force)
 
 def _install_prepare_commit_msg_hook(force: bool):
@@ -570,6 +567,38 @@ def _uninstall_hook_file(hook_name: str, signature: str, git_root: Path, debug: 
         if debug:
             console.print_exception()
         sys.exit(1)
+
+
+@main.command()
+@click.pass_context
+def set_alias(ctx: click.Context):
+    """Set a git alias for easy commit message generation."""
+    console.print("[bold blue]Setting up git alias[/bold blue]")
+
+    try:
+        from git import Repo, GitCommandError
+        import os
+        repo = Repo(os.getcwd(), search_parent_directories=True)
+    except (GitCommandError, ImportError):
+        console.print("[red]Not in a git repository or gitpython not installed.[/red]")
+        sys.exit(1)
+
+    def is_alias_taken(name):
+        return repo.config_reader().has_option("alias", name)
+
+    alias_name = click.prompt("Enter a name for the git alias", default="c")
+
+    if is_alias_taken(alias_name):
+        if not click.confirm(f"Alias '{alias_name}' is already taken. Overwrite?"):
+            console.print("[yellow]Alias setup cancelled.[/yellow]")
+            return
+
+    alias_command = "!git diff --cached | commitlm generate --short-message | git commit -F -"
+    with repo.config_writer(config_level='global') as cw:
+        cw.set_value("alias", alias_name, alias_command)
+
+    console.print(f"[green]✅ Alias '{alias_name}' set successfully.[/green]")
+    console.print(f"You can now use 'git {alias_name}' to commit with a generated message.")
 
 
 if __name__ == "__main__":
