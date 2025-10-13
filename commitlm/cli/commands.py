@@ -121,6 +121,15 @@ def init(
     else:
         _init_api_provider(config_data, provider, model)
 
+    if click.confirm("\nDo you want to use different models for specific tasks?", default=False):
+        if click.confirm("  - Configure a specific model for commit message generation?", default=True):
+            task_config = _prompt_for_task_model(provider)
+            config_data["commit_message"] = task_config
+
+        if click.confirm("  - Configure a specific model for documentation generation?", default=True):
+            task_config = _prompt_for_task_model(provider)
+            config_data["doc_generation"] = task_config
+
     fallback_to_local = click.confirm(
         "\nEnable fallback to a local model if the API fails?", default=False
     )
@@ -136,7 +145,7 @@ def init(
         ctx.invoke(install_hook, force=force)
 
         # Prompt to set up alias
-        if click.confirm("\nWould you like to set up a git alias for easier commits? (Recommended)"):
+        if click.confirm("\nWould you like to set up a git alias for easier commits?"):
             ctx.invoke(set_alias)
         else:
             console.print("\nTo generate a commit message, you can run:")
@@ -148,6 +157,16 @@ def init(
         console.print(f"[red]❌ Failed to save configuration: {e}[/red]")
         sys.exit(1)
 
+def _prompt_for_task_model(default_provider: str) -> dict:
+    """Helper to prompt for task-specific model config."""
+    console.print("") # for spacing
+    provider = click.prompt(
+        "    Provider for this task",
+        type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
+        default=default_provider,
+    )
+    model = click.prompt(f"    Model for this task")
+    return {"provider": provider, "model": model}
 
 def _init_huggingface(config_data: dict, model: Optional[str]):
     """Initialize HuggingFace configuration."""
@@ -363,13 +382,14 @@ def generate(
                 settings_dict["model"] = model
             runtime_settings = Settings(**settings_dict)
 
-        client = create_llm_client(runtime_settings)
-
         if short_message:
+            client = create_llm_client(runtime_settings, task="commit_message")
             # When generating a short message for the hook, just print the raw text
             message = client.generate_short_message(diff_content)
             print(message)
             sys.exit(0)
+        else:
+            client = create_llm_client(runtime_settings, task="doc_generation")
 
         console.print(
             f"[blue]Using provider: {runtime_settings.provider}, model: {runtime_settings.model}[/blue]"

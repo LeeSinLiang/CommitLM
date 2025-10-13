@@ -1,7 +1,7 @@
 """HuggingFace local model client for CPU-optimized documentation generation."""
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional, Union
 import logging
 import os
 
@@ -34,7 +34,7 @@ from ..config.prompts import (
     render_documentation_prompt,
     render_short_commit_message_prompt,
 )
-from typing import Union
+from typing import Union, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -721,17 +721,27 @@ class LLMClientFactory:
     """Factory for creating LLM clients."""
 
     @staticmethod
-    def create_client(settings: Settings) -> LLMClient:
+    def create_client(settings: Settings, task: Optional[str] = None) -> LLMClient:
         """Create an LLM client based on the settings."""
+        active_config = settings.get_active_llm_config(task)
+        
         provider = settings.provider
+        if task:
+            task_settings = getattr(settings, task, None)
+            if task_settings and task_settings.provider:
+                provider = task_settings.provider
+
+        if not active_config:
+            raise LLMClientError(f"Configuration for provider '{provider}' not found.")
+
         if provider == "huggingface":
-            return HuggingFaceClient(settings.huggingface)
+            return HuggingFaceClient(active_config)
         elif provider == "gemini":
-            return GeminiClient(settings.gemini)
+            return GeminiClient(active_config)
         elif provider == "anthropic":
-            return AnthropicClient(settings.anthropic)
+            return AnthropicClient(active_config)
         elif provider == "openai":
-            return OpenAIClient(settings.openai)
+            return OpenAIClient(active_config)
         else:
             raise LLMClientError(f"Unsupported LLM provider: {provider}")
 
@@ -748,9 +758,9 @@ class LLMClientFactory:
         return TRANSFORMERS_AVAILABLE and model in CPU_MODEL_CONFIGS
 
 
-def create_llm_client(settings: Settings) -> LLMClient:
+def create_llm_client(settings: Settings, task: Optional[str] = None) -> LLMClient:
     """Convenience function to create an LLM client."""
-    return LLMClientFactory.create_client(settings)
+    return LLMClientFactory.create_client(settings, task)
 
 
 def get_available_models() -> List[str]:
