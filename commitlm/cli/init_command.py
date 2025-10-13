@@ -9,12 +9,12 @@ import click
 from rich.console import Console
 from rich.table import Table
 from InquirerPy import prompt
-from InquirerPy.validator import PathValidator
 
 from ..config.settings import CPU_MODEL_CONFIGS
 from ..core.llm_client import get_available_models
 
 console = Console()
+
 
 def init_command(
     ctx: click.Context,
@@ -40,14 +40,16 @@ def init_command(
     if config_path.exists() and not force:
         questions = [
             {
-                "type": "confirm",
+                "type": "list",
                 "message": f"Configuration file {config_path} already exists. Overwrite?",
+                "choices": ["Yes", "No"],
                 "name": "overwrite",
-                "default": False,
+                "default": "No",
+                "qmark": "",
             }
         ]
         answers = prompt(questions)
-        if not answers.get("overwrite"):
+        if answers.get("overwrite") == "No":
             console.print("[yellow]Initialization cancelled.[/yellow]")
             return
 
@@ -59,6 +61,7 @@ def init_command(
                 "choices": ["huggingface", "gemini", "anthropic", "openai"],
                 "name": "provider",
                 "default": "huggingface",
+                "qmark": "",
             }
         ]
         answers = prompt(questions)
@@ -81,6 +84,7 @@ def init_command(
             "choices": ["commit_message", "doc_generation", "both"],
             "name": "enabled_tasks",
             "default": "both",
+            "qmark": "",
         }
     ]
     answers = prompt(questions)
@@ -91,53 +95,61 @@ def init_command(
 
     questions = [
         {
-            "type": "confirm",
+            "type": "list",
             "message": "\nDo you want to use different models for specific tasks?",
+            "choices": ["Yes", "No"],
             "name": "use_specific_models",
-            "default": False,
+            "default": "No",
+            "qmark": "",
         }
     ]
     answers = prompt(questions)
 
-    if answers.get("use_specific_models"):
+    if answers.get("use_specific_models") == "Yes":
         if config_data["commit_message_enabled"]:
             questions = [
                 {
-                    "type": "confirm",
-                    "message": "  - Configure a specific model for commit message generation?",
+                    "type": "list",
+                    "message": "Configure a specific model for commit message generation?",
+                    "choices": ["Yes", "No"],
                     "name": "config_commit_msg_model",
-                    "default": True,
+                    "default": "Yes",
+                    "qmark": "",
                 }
             ]
             answers = prompt(questions)
-            if answers.get("config_commit_msg_model"):
+            if answers.get("config_commit_msg_model") == "Yes":
                 task_config = _prompt_for_task_model(provider)
                 config_data["commit_message"] = task_config
 
         if config_data["doc_generation_enabled"]:
             questions = [
                 {
-                    "type": "confirm",
-                    "message": "  - Configure a specific model for documentation generation?",
+                    "type": "list",
+                    "message": "Configure a specific model for documentation generation?",
+                    "choices": ["Yes", "No"],
                     "name": "config_doc_gen_model",
-                    "default": True,
+                    "default": "Yes",
+                    "qmark": "",
                 }
             ]
             answers = prompt(questions)
-            if answers.get("config_doc_gen_model"):
+            if answers.get("config_doc_gen_model") == "Yes":
                 task_config = _prompt_for_task_model(provider)
                 config_data["doc_generation"] = task_config
 
     questions = [
         {
-            "type": "confirm",
+            "type": "list",
             "message": "\nEnable fallback to a local model if the API fails?",
+            "choices": ["Yes", "No"],
             "name": "fallback_to_local",
-            "default": False,
+            "default": "No",
+            "qmark": "",
         }
     ]
     answers = prompt(questions)
-    config_data["fallback_to_local"] = answers.get("fallback_to_local")
+    config_data["fallback_to_local"] = answers.get("fallback_to_local") == "Yes"
 
     try:
         with open(config_path, "w") as f:
@@ -161,14 +173,16 @@ def init_command(
         # Prompt to set up alias
         questions = [
             {
-                "type": "confirm",
+                "type": "list",
                 "message": "\nWould you like to set up a git alias for easier commits?",
+                "choices": ["Yes", "No"],
                 "name": "setup_alias",
-                "default": True,
+                "default": "Yes",
+                "qmark": "",
             }
         ]
         answers = prompt(questions)
-        if config_data["commit_message_enabled"] and answers.get("setup_alias"):
+        if config_data["commit_message_enabled"] and answers.get("setup_alias") == "Yes":
             from .commands import set_alias
             ctx.invoke(set_alias)
         else:
@@ -184,19 +198,20 @@ def init_command(
 
 def _prompt_for_task_model(default_provider: str) -> dict:
     """Helper to prompt for task-specific model config."""
-    console.print("") # for spacing
     questions = [
         {
             "type": "list",
-            "message": "    Provider for this task",
+            "message": "Provider for this task",
             "choices": ["huggingface", "gemini", "anthropic", "openai"],
             "name": "provider",
             "default": default_provider,
+            "qmark": "",
         },
         {
             "type": "input",
-            "message": "    Model for this task",
+            "message": "Model for this task",
             "name": "model",
+            "qmark": "",
         },
     ]
     answers = prompt(questions)
@@ -227,6 +242,7 @@ def _init_huggingface(config_data: dict, model: Optional[str]):
                 "choices": available_models,
                 "name": "model",
                 "default": "qwen2.5-coder-1.5b",
+                "qmark": "",
             }
         ]
         answers = prompt(questions)
@@ -243,6 +259,7 @@ def _init_api_provider(config_data: dict, provider: str, model: Optional[str]):
             "type": "password",
             "message": f"Enter {provider.capitalize()} API key",
             "name": "api_key",
+            "qmark": "",
         }
     ]
     answers = prompt(questions)
@@ -260,6 +277,7 @@ def _init_api_provider(config_data: dict, provider: str, model: Optional[str]):
                 "message": f"Enter {provider.capitalize()} model",
                 "name": "model",
                 "default": default_models.get(provider, ""),
+                "qmark": "",
             }
         ]
         answers = prompt(questions)

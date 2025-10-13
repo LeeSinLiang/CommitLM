@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 import click
+from InquirerPy import prompt
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -386,12 +387,26 @@ def change_model(ctx: click.Context, task: str):
     settings = ctx.obj["settings"]
     
     if task == "default":
-        provider = click.prompt(
-            "Select LLM provider",
-            type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
-            default=settings.provider,
-        )
-        model = click.prompt("Enter the model name", default=settings.model)
+        questions = [
+            {
+                "type": "list",
+                "message": "Select LLM provider",
+                "choices": ["huggingface", "gemini", "anthropic", "openai"],
+                "name": "provider",
+                "default": settings.provider,
+                "qmark": "",
+            },
+            {
+                "type": "input",
+                "message": "Enter the model name",
+                "name": "model",
+                "default": settings.model,
+                "qmark": "",
+            }
+        ]
+        answers = prompt(questions)
+        provider = answers.get("provider")
+        model = answers.get("model")
         settings.provider = provider
         settings.model = model
     else:
@@ -403,12 +418,26 @@ def change_model(ctx: click.Context, task: str):
         default_provider = task_settings.provider if task_settings.provider else settings.provider
         default_model = task_settings.model if task_settings.model else settings.model
         
-        provider = click.prompt(
-            f"Select LLM provider for {task}",
-            type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
-            default=default_provider,
-        )
-        model = click.prompt(f"Enter the model name for {task}", default=default_model)
+        questions = [
+            {
+                "type": "list",
+                "message": f"Select LLM provider for {task}",
+                "choices": ["huggingface", "gemini", "anthropic", "openai"],
+                "name": "provider",
+                "default": default_provider,
+                "qmark": "",
+            },
+            {
+                "type": "input",
+                "message": f"Enter the model name for {task}",
+                "name": "model",
+                "default": default_model,
+                "qmark": "",
+            }
+        ]
+        answers = prompt(questions)
+        provider = answers.get("provider")
+        model = answers.get("model")
         
         task_settings.provider = provider
         task_settings.model = model
@@ -422,22 +451,67 @@ def enable_task(ctx: click.Context):
     """Enable or disable tasks and configure their models."""
     settings = ctx.obj["settings"]
 
-    enabled_tasks = click.prompt(
-        "Which tasks do you want to enable?",
-        type=click.Choice(["commit_message", "doc_generation", "both"]),
-        default="both"
-    )
+    questions = [
+        {
+            "type": "list",
+            "message": "Which tasks do you want to enable?",
+            "choices": ["commit_message", "doc_generation", "both"],
+            "name": "enabled_tasks",
+            "default": "both",
+            "qmark": "",
+        }
+    ]
+    answers = prompt(questions)
+    enabled_tasks = answers.get("enabled_tasks")
     settings.commit_message_enabled = enabled_tasks in ["commit_message", "both"]
     settings.doc_generation_enabled = enabled_tasks in ["doc_generation", "both"]
 
-    if click.confirm("\nDo you want to use different models for the enabled tasks?", default=False):
-        if settings.commit_message_enabled and click.confirm("  - Configure a specific model for commit message generation?", default=True):
-            task_config = _prompt_for_task_model(settings.provider)
-            settings.commit_message = TaskSettings(**task_config)
+    questions = [
+        {
+            "type": "list",
+            "message": "\nDo you want to use different models for the enabled tasks?",
+            "choices": ["Yes", "No"],
+            "name": "use_specific_models",
+            "default": "No",
+            "qmark": "",
+        }
+    ]
+    answers = prompt(questions)
 
-        if settings.doc_generation_enabled and click.confirm("  - Configure a specific model for documentation generation?", default=True):
-            task_config = _prompt_for_task_model(settings.provider)
-            settings.doc_generation = TaskSettings(**task_config)
+    if answers.get("use_specific_models") == "Yes":
+        if settings.commit_message_enabled:
+            questions = [
+                {
+                    "type": "list",
+                    "message": "Configure a specific model for commit message generation?",
+                    "choices": ["Yes", "No"],
+                    "name": "config_commit_msg_model",
+                    "default": "Yes",
+                    "qmark": "",
+                }
+            ]
+            answers = prompt(questions)
+            if answers.get("config_commit_msg_model") == "Yes":
+                from .init_command import _prompt_for_task_model
+                task_config = _prompt_for_task_model(settings.provider)
+                settings.commit_message = TaskSettings(**task_config)
+
+        if settings.doc_generation_enabled:
+            questions = [
+                {
+                    "type": "list",
+                    "message": "Configure a specific model for documentation generation?",
+                    "choices": ["Yes", "No"],
+                    "name": "config_doc_gen_model",
+                    "default": "Yes",
+                    "qmark": "",
+                }
+            ]
+            answers = prompt(questions)
+            if answers.get("config_doc_gen_model") == "Yes":
+                from .init_command import _prompt_for_task_model
+                task_config = _prompt_for_task_model(settings.provider)
+                settings.doc_generation = TaskSettings(**task_config)
     else:
         # Reset task-specific models if user chooses not to use them
         settings.commit_message = None
@@ -494,7 +568,18 @@ def _install_prepare_commit_msg_hook(force: bool):
     hooks_dir = git_client.repo_path / ".git" / "hooks"
     hook_file = hooks_dir / "prepare-commit-msg"
     if hook_file.exists() and not force:
-        if not click.confirm(f"Hook already exists at {hook_file}. Overwrite?"):
+        questions = [
+            {
+                "type": "list",
+                "message": f"Hook already exists at {hook_file}. Overwrite?",
+                "choices": ["Yes", "No"],
+                "name": "overwrite",
+                "default": "No",
+                "qmark": "",
+            }
+        ]
+        answers = prompt(questions)
+        if answers.get("overwrite") == "No":
             console.print("[yellow]Installation cancelled.[/yellow]")
             return
     import tempfile
@@ -516,7 +601,18 @@ def _install_post_commit_hook(force: bool):
     hooks_dir = git_client.repo_path / ".git" / "hooks"
     hook_file = hooks_dir / "post-commit"
     if hook_file.exists() and not force:
-        if not click.confirm(f"Hook already exists at {hook_file}. Overwrite?"):
+        questions = [
+            {
+                "type": "list",
+                "message": f"Hook already exists at {hook_file}. Overwrite?",
+                "choices": ["Yes", "No"],
+                "name": "overwrite",
+                "default": "No",
+                "qmark": "",
+            }
+        ]
+        answers = prompt(questions)
+        if answers.get("overwrite") == "No":
             console.print("[yellow]Installation cancelled.[/yellow]")
             return
     import tempfile
@@ -567,7 +663,18 @@ def _uninstall_hook_file(hook_name: str, signature: str, git_root: Path, debug: 
             console.print(
                 f"[yellow]⚠️  Existing {hook_name} hook doesn't appear to be from CommitLM[/yellow]"
             )
-            if not click.confirm("Remove it anyway?"):
+            questions = [
+                {
+                    "type": "list",
+                    "message": "Remove it anyway?",
+                    "choices": ["Yes", "No"],
+                    "name": "remove",
+                    "default": "No",
+                    "qmark": "",
+                }
+            ]
+            answers = prompt(questions)
+            if answers.get("remove") == "No":
                 console.print(f"[yellow]Uninstall of {hook_name} cancelled.[/yellow]")
                 return
 
@@ -605,10 +712,31 @@ def set_alias(ctx: click.Context):
     def is_alias_taken(name):
         return repo.config_reader().has_option("alias", name)
 
-    alias_name = click.prompt("Enter a name for the git alias", default="c")
+    questions = [
+        {
+            "type": "input",
+            "message": "Enter a name for the git alias",
+            "name": "alias_name",
+            "default": "c",
+            "qmark": "",
+        }
+    ]
+    answers = prompt(questions)
+    alias_name = answers.get("alias_name")
 
     if is_alias_taken(alias_name):
-        if not click.confirm(f"Alias '{alias_name}' is already taken. Overwrite?"):
+        questions = [
+            {
+                "type": "list",
+                "message": f"Alias '{alias_name}' is already taken. Overwrite?",
+                "choices": ["Yes", "No"],
+                "name": "overwrite",
+                "default": "No",
+                "qmark": "",
+            }
+        ]
+        answers = prompt(questions)
+        if answers.get("overwrite") == "No":
             console.print("[yellow]Alias setup cancelled.[/yellow]")
             return
 

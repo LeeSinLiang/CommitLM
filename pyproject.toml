@@ -23,7 +23,8 @@ dependencies = [
     "watchdog",
     "google-genai",
     "anthropic",
-    "openai"
+    "openai",
+    "InquirerPy"
 ]
 
 [project.scripts]
