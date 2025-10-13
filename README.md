@@ -1,16 +1,27 @@
-# CommitLM — Docs on every commit.
+# CommitLM — AI-Native Git Documentation & Commit Messages
 
-**Automated Documentation Generation for Every Git Commit**
+**Automated Documentation and Commit Message Generation for Every Git Commit**
 
-CommitLM is an AI-powered tool that automatically generates documentation for your code changes and creates conventional commit messages for you. It integrates with Git to analyze your staged changes and provide documentation and commit messages, streamlining your workflow and improving your project's maintainability.
+CommitLM is an AI-native tool that automatically generates comprehensive documentation for your code changes and creates conventional commit messages. It integrates seamlessly with Git through hooks to analyze your changes and provide intelligent documentation and commit messages, streamlining your workflow and improving your project's maintainability.
 
 ## Features
 
-- **🤖 Automatic Git Hook Integration**: Generates documentation automatically after every commit
-- **📁 Organized Documentation**: All docs are saved in `docs/` folder with timestamps and commit hashes
-- **🏠 Local AI Models**: Uses HuggingFace models (Qwen2.5-Coder, TinyLlama, Phi-3, etc.) - no API keys required
-- **⚡ GPU/CPU Auto-detection**: Automatically uses NVIDIA GPU if available, falls back to CPU
+### Core Capabilities
+- **📝 Automatic Commit Messages**: AI-generated conventional commit messages via `prepare-commit-msg` hook
+- **📚 Automatic Documentation**: Comprehensive docs generated after every commit via `post-commit` hook
+- **🎯 Task-Specific Models**: Use different models for commit messages vs documentation generation
+- **📁 Organized Documentation**: All docs saved in `docs/` folder with timestamps and commit hashes
+
+### Multi-Provider Support
+- **☁️ Cloud APIs**: Google Gemini, Anthropic Claude, OpenAI GPT support
+- **🏠 Local Models**: HuggingFace models (Qwen2.5-Coder, Phi-3, TinyLlama) - no API keys required
+- **🔄 Fallback Options**: Configure fallback to local models if API fails
+- **⚙️ Flexible Configuration**: Mix and match providers for different tasks
+
+### Performance & Optimization
+- **⚡ GPU/CPU Auto-detection**: Automatically uses NVIDIA GPU, Apple Silicon, or CPU
 - **💾 Memory Optimization**: Toggleable 8-bit quantization for systems with limited RAM
+- **🎯 Extended Context**: YaRN support for Qwen models (up to 131K tokens)
 
 ## Quick Start
 
@@ -27,56 +38,106 @@ pip install -e .
 ### 2. Initialize Configuration
 
 ```bash
-# Interactive setup (recommended) - guides you through model selection, YaRN, and token limits
+# Interactive setup (recommended) - guides you through provider, model, and task selection
 commitlm init
 
-# Non-interactive setup with specific options
-commitlm init --model qwen2.5-coder-1.5b --max-tokens 1024 --enable-yarn
+# Setup with specific provider and model
+commitlm init --provider gemini --model gemini-2.0-flash-exp
+commitlm init --provider anthropic --model claude-3-5-haiku-latest
+commitlm init --provider openai --model gpt-4o-mini
+commitlm init --provider huggingface --model qwen2.5-coder-1.5b
 ```
 
 #### Interactive Setup Flow
 
 When you run `commitlm init`, you'll be guided through:
 
-1. **Model Selection**: Choose from available models with recommendations
-2. **YaRN Configuration** (Qwen models only): Enable extended context for large diffs
-3. **Max Token Configuration**: Set output length with smart defaults based on your choices
+1. **Provider Selection**: Choose between local (HuggingFace) or cloud (Gemini, Anthropic, OpenAI)
+2. **Model Selection**: Pick from provider-specific models
+3. **Task Configuration**: Enable commit messages, documentation, or both
+4. **Task-Specific Models** (optional): Use different models for different tasks
+5. **Fallback Configuration**: Set up fallback to local models if API fails
 
 Example interactive session:
 ```
-? Select LLM provider › huggingface
-? Select model › qwen2.5-coder-1.5b
+? Select LLM provider › gemini
+? Select model › gemini-2.0-flash-exp
 ? Which tasks do you want to enable? › both
-? Do you want to use different models for specific tasks? › No
-? Enable fallback to a local model if the API fails? › No
+? Do you want to use different models for specific tasks? › Yes
+  ? Select provider for commit_message › huggingface
+  ? Select model › qwen2.5-coder-1.5b
+? Enable fallback to a local model if the API fails? › Yes
 ```
 
-**Model Options:**
-- `qwen2.5-coder-1.5b` - **Recommended** - Best performance/speed ratio with YaRN support for extended context (1.5B params)
-- `phi-3-mini-128k` - Long-context model with 128K token window. Excellent for large diffs (3.8B params)  
+#### Provider Options
+
+**Local Models (HuggingFace)** - No API keys required:
+- `qwen2.5-coder-1.5b` - **Recommended** - Best performance/speed ratio, YaRN support (1.5B params)
+- `phi-3-mini-128k` - Long context (128K tokens), excellent for large diffs (3.8B params)
 - `tinyllama` - Minimal resource usage (1.1B params)
 
-### 3. Install Git Hook
+**Cloud APIs** - Faster, more capable:
+- **Gemini**: `gemini-2.0-flash-exp`, `gemini-1.5-pro`, `gemini-1.5-flash` (requires `GEMINI_API_KEY`)
+- **Anthropic**: `claude-3-5-sonnet-latest`, `claude-3-5-haiku-latest` (requires `ANTHROPIC_API_KEY`)
+- **OpenAI**: `gpt-4o`, `gpt-4o-mini` (requires `OPENAI_API_KEY`)
+
+### 3. Install Git Hooks
+
+CommitLM provides two powerful git hooks:
 
 ```bash
-# Enable automatic documentation generation on every commit
+# Install both hooks (recommended)
 commitlm install-hook
+
+# Install only commit message generation
+commitlm install-hook message
+
+# Install only documentation generation
+commitlm install-hook docs
 ```
 
-After installing the git hook, every time you run `git commit`, AI will automatically:
-1. Analyze your git diff
-2. Generate comprehensive documentation 
-3. Save it in the `docs/` folder with timestamp and commit hash
-4. No manual intervention required
+**What each hook does**:
+
+**`prepare-commit-msg` hook** (Commit Messages):
+1. Runs before commit editor opens
+2. Analyzes staged changes (`git diff --cached`)
+3. Generates conventional commit message
+4. Pre-fills commit message in editor
+
+**`post-commit` hook** (Documentation):
+1. Runs after commit completes
+2. Extracts commit diff
+3. Generates comprehensive documentation
+4. Saves to `docs/commit_<hash>_<timestamp>.md`
 
 Example workflow:
 ```bash
 # Make your code changes
 git add .
-git commit -m "feat: add user authentication system"
 
-# AI automatically generates documentation at:
-# docs/commit_abc1234_2024-01-15_14-30-25.md
+# Option 1: Use hook to generate message
+git commit
+# Editor opens with AI-generated message pre-filled
+# Edit if needed, save and close
+
+# Option 2: Use git alias (see below)
+git c  # Stages, generates message, commits in one step
+
+# Documentation is automatically generated after commit completes
+# docs/commit_abc1234_2025-01-15_14-30-25.md
+```
+
+#### Alternative: Git Alias Workflow
+
+Set up a convenient git alias for one-command commits:
+
+```bash
+commitlm set-alias
+# Creates 'git c' alias (or custom name)
+
+# Now use it:
+git add .
+git c  # Automatically generates message and commits
 ```
 
 ### 4. Validate Setup
@@ -99,120 +160,158 @@ commitlm status
 - NVIDIA GPU with 4GB+ VRAM (optional, auto-detected)
 - SSD storage
 
-## Hardware Support
+## Configuration
 
-The tool automatically detects and uses the best available hardware:
+### Environment Variables
+
+Set API keys for cloud providers:
+
+```bash
+# In your shell profile (~/.bashrc, ~/.zshrc, etc.)
+export GEMINI_API_KEY="your-gemini-api-key"
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+### Task-Specific Models
+
+Use different models for different tasks:
+
+```bash
+# Enable task-specific models during init
+commitlm init
+# Select "Yes" when prompted "Do you want to use different models for specific tasks?"
+
+# Or configure later
+commitlm enable-task
+
+# Change model for specific task
+commitlm config change-model commit_message
+commitlm config change-model doc_generation
+```
+
+**Example use case**: Use fast local model (Qwen) for commit messages, powerful cloud API (Claude) for documentation.
+
+### Configuration File
+
+Configuration is stored in `.commitlm-config.json` at your git repository root:
+
+```json
+{
+  "provider": "gemini",
+  "model": "gemini-2.0-flash-exp",
+  "commit_message_enabled": true,
+  "doc_generation_enabled": true,
+  "commit_message": {
+    "provider": "huggingface",
+    "model": "qwen2.5-coder-1.5b"
+  },
+  "doc_generation": {
+    "provider": "gemini",
+    "model": "gemini-1.5-pro"
+  },
+  "fallback_to_local": true
+}
+```
+
+## Hardware Support (Local Models)
+
+When using HuggingFace local models, the tool automatically detects and uses the best available hardware:
 
 1. **NVIDIA GPU** (CUDA) - Uses GPU acceleration with `device_map="auto"`
 2. **Apple Silicon** (MPS) - Uses Apple's Metal Performance Shaders
 3. **CPU** - Falls back to optimized CPU inference
 
-## Memory Optimization
+### Memory Optimization
 
-Memory optimization is **enabled by default** and includes:
+Memory optimization is **enabled by default** for local models and includes:
 - 8-bit quantization (reduces memory by ~50%)
 - float16 precision
 - Automatic model sharding
 
 Disable for better quality (requires more RAM):
 ```bash
-commitlm init --no-memory-optimization
+commitlm init --provider huggingface --no-memory-optimization
 ```
 
 ## Usage Examples
 
-### Normal Workflow (Automatic)
-After running `commitlm install-hook`, documentation is generated automatically:
+### Using Commit Message Hook
 
 ```bash
-# Make changes to your code
-echo "console.log('new feature')" >> src/app.js
+# Make changes
+echo "def new_feature(): pass" >> src/app.py
+git add .
 
-# Commit as usual - documentation happens automatically
+# Commit without message - hook generates it
+git commit
+# Editor opens with pre-filled message:
+# feat(app): add new feature function
+
+# Review, edit if needed, save and close
+```
+
+### Using Git Alias
+
+```bash
+# Set up alias once
+commitlm set-alias
+
+# Use it for every commit
+git add .
+git c  # Generates message and commits automatically
+```
+
+### Using Documentation Hook
+
+After installing the `post-commit` hook:
+
+```bash
+# Make changes
+echo "console.log('new feature')" >> src/app.js
 git add .
 git commit -m "feat: add logging feature"
 
-# Check the generated documentation
-ls docs/
-# Output: commit_a1b2c3d_2024-01-15_14-30-25.md
+# Documentation automatically generated at:
+# docs/commit_a1b2c3d_2025-01-15_14-30-25.md
 ```
 
-### Manual Generation (Debug Only)
-The `generate` command is for testing and debugging purposes, not everyday use:
+### Manual Generation (Testing/Debugging)
 
 ```bash
-# Test the AI model with sample diff (for debugging)
-commitlm generate "fix: resolve memory leak in user session handler
+# Test documentation generation with sample diff
+commitlm generate "fix: resolve memory leak
+- Fixed session cleanup
+- Added event listener removal"
 
-- Fixed session cleanup on logout
-- Added proper event listener removal  
-- Implemented garbage collection for expired tokens"
+# Test commit message generation
+echo "function test() {}" > test.js
+git add test.js
+commitlm generate --short-message
+
+# Use specific provider/model for testing
+commitlm generate --provider gemini --model gemini-2.0-flash-exp "your diff here"
 ```
 
-### Model Selection During Init
-```bash
-# For systems with limited RAM (3-4GB)
-commitlm init --model tinyllama
+### Advanced: YaRN Extended Context (Local Models)
 
-# For systems with good specs (8GB+ RAM) - long context support
-commitlm init --model phi-3-mini-128k --no-memory-optimization
-
-# For code-focused tasks (recommended)
-commitlm init --model qwen2.5-coder-1.5b
-
-# Enable YaRN for extended context (Qwen models only)
-commitlm init --model qwen2.5-coder-1.5b --enable-yarn
-```
-
-### YaRN Extended Context (Qwen Models)
-
-YaRN (Yet another RoPE extensioN) enables extended context lengths for better handling of large git diffs:
+For HuggingFace Qwen models, YaRN enables extended context lengths:
 
 ```bash
-# Enable YaRN with default settings
-commitlm init --model qwen2.5-coder-1.5b --enable-yarn
+# Enable YaRN during initialization
+commitlm init --provider huggingface --model qwen2.5-coder-1.5b --enable-yarn
 
 # YaRN with memory optimization (64K context)
-commitlm init --model qwen2.5-coder-1.5b --enable-yarn --memory-optimization
+commitlm init --provider huggingface --model qwen2.5-coder-1.5b --enable-yarn --memory-optimization
 
-# YaRN with full performance (131K context)  
-commitlm init --model qwen2.5-coder-1.5b --enable-yarn --no-memory-optimization
-
-# Override YaRN for specific generation
-commitlm generate "large diff content" --enable-yarn
+# YaRN with full performance (131K context)
+commitlm init --provider huggingface --model qwen2.5-coder-1.5b --enable-yarn --no-memory-optimization
 ```
 
 **YaRN Benefits:**
-- **Extended Context**: Up to 131K tokens (vs 32K default)
-- **Better Large Diff Handling**: Processes extensive code changes without truncation
-- **Automatic Scaling**: Adapts scaling factor based on memory optimization settings
-
-### Custom Token Limits
-```bash
-# Set custom max tokens (default varies by model)
-commitlm init --max-tokens 512   # Shorter, focused docs
-commitlm init --max-tokens 2048  # Longer, detailed docs
-```
-
-## Configuration
-
-Configuration is stored in `.commitlm-config.json`:
-
-```json
-{
-  "model": "qwen2.5-coder-1.5b",
-  "huggingface": {
-    "model": "qwen2.5-coder-1.5b", 
-    "max_tokens": 512,
-    "temperature": 0.2,
-    "device": "auto",
-    "memory_optimization": true
-  },
-  "documentation": {
-    "output_dir": "docs"
-  }
-}
-```
+- Extended context up to 131K tokens (vs 32K default)
+- Better handling of large git diffs without truncation
+- Automatic scaling based on memory optimization settings
 
 ## Commands
 
@@ -239,32 +338,66 @@ Configuration is stored in `.commitlm-config.json`:
 
 ## Troubleshooting
 
-### Model Download Issues
+### API Key Issues
+```bash
+# Verify environment variables are set
+echo $GEMINI_API_KEY
+echo $ANTHROPIC_API_KEY
+echo $OPENAI_API_KEY
+
+# Add to shell profile if missing
+export GEMINI_API_KEY="your-key-here"
+```
+
+### Model Download Issues (Local Models)
 Models are downloaded automatically on first use to `~/.cache/huggingface/`. Ensure you have internet connection and sufficient disk space.
 
-### Memory Errors  
+### Memory Errors (Local Models)
 ```bash
 # Enable memory optimization (default)
-commitlm init --memory-optimization
+commitlm init --provider huggingface --memory-optimization
 
 # Try a smaller model
-commitlm init --model tinyllama
+commitlm init --provider huggingface --model tinyllama
+
+# Or switch to cloud API
+commitlm init --provider gemini
 ```
 
-### Performance Issues
+### Performance Issues (Local Models)
 ```bash
-# Disable memory optimization for better quality
-commitlm init --no-memory-optimization
+# Check hardware detection
+commitlm status
 
-# Use GPU if available (auto-detected by default)
-commitlm status  # Check if GPU is detected
+# Disable memory optimization for better quality
+commitlm init --provider huggingface --no-memory-optimization
+
+# Switch to cloud API for faster generation
+commitlm config change-model default
+# Select cloud provider (Gemini/Anthropic/OpenAI)
 ```
 
-### CUDA/GPU Issues
+### Hook Not Working
+```bash
+# Verify hooks are installed
+ls -la .git/hooks/
+
+# Reinstall hooks
+commitlm install-hook --force
+
+# Check which tasks are enabled
+commitlm config get commit_message_enabled
+commitlm config get doc_generation_enabled
+
+# Enable/disable tasks
+commitlm enable-task
+```
+
+### CUDA/GPU Issues (Local Models)
 ```bash
 # Check GPU detection
 commitlm status
 
-# Force CPU usage if GPU causes issues  
+# Force CPU usage if GPU causes issues
 # Edit .commitlm-config.json and set "device": "cpu"
 ```
