@@ -136,8 +136,13 @@ def init(
         ctx.invoke(install_hook, force=force)
 
         # Prompt to set up alias
-        if click.confirm("\nWould you like to set up a git alias for easier commits?"):
+        if click.confirm("\nWould you like to set up a git alias for easier commits? (Recommended)"):
             ctx.invoke(set_alias)
+        else:
+            console.print("\nTo generate a commit message, you can run:")
+            console.print("[bold cyan]git diff --cached | commitlm generate --short-message[/bold cyan]")
+            console.print("\nYou can set up an alias for this command later by running:")
+            console.print("[bold cyan]commitlm set-alias[/bold cyan]")
 
     except Exception as e:
         console.print(f"[red]❌ Failed to save configuration: {e}[/red]")
