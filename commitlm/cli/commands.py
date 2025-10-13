@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from ..config.settings import init_settings, CPU_MODEL_CONFIGS
+from ..config.settings import init_settings, CPU_MODEL_CONFIGS, TaskSettings
 from ..core.llm_client import LLMClientError, get_available_models
 
 console = Console()
@@ -62,6 +62,7 @@ def main(
 
 
 @main.command()
+@click.pass_context
 @click.option(
     "--provider",
     type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
@@ -76,6 +77,7 @@ def main(
 )
 @click.option("--force", is_flag=True, help="Overwrite existing configuration")
 def init(
+    ctx: click.Context,
     provider: Optional[str],
     model: Optional[str],
     output_dir: str,
@@ -119,6 +121,23 @@ def init(
     else:
         _init_api_provider(config_data, provider, model)
 
+    enabled_tasks = click.prompt(
+        "Which tasks do you want to enable?",
+        type=click.Choice(["commit_message", "doc_generation", "both"]),
+        default="both"
+    )
+    config_data["commit_message_enabled"] = enabled_tasks in ["commit_message", "both"]
+    config_data["doc_generation_enabled"] = enabled_tasks in ["doc_generation", "both"]
+
+    if click.confirm("\nDo you want to use different models for specific tasks?", default=False):
+        if config_data["commit_message_enabled"] and click.confirm("  - Configure a specific model for commit message generation?", default=True):
+            task_config = _prompt_for_task_model(provider)
+            config_data["commit_message"] = task_config
+
+        if config_data["doc_generation_enabled"] and click.confirm("  - Configure a specific model for documentation generation?", default=True):
+            task_config = _prompt_for_task_model(provider)
+            config_data["doc_generation"] = task_config
+
     fallback_to_local = click.confirm(
         "\nEnable fallback to a local model if the API fails?", default=False
     )
@@ -128,15 +147,43 @@ def init(
         with open(config_path, "w") as f:
             json.dump(config_data, f, indent=2)
         console.print(f"\n[green]✅ Configuration saved to {config_path}[/green]")
-        console.print("\n[bold]Next Steps:[/bold]")
-        console.print("• Run 'commitlm validate' to test the model connection")
-        console.print(
-            "• Run 'commitlm install-hook' to enable automatic documentation generation"
-        )
+
+        # Automatically run install-hook
+        console.print("\n[bold]Next Step: Installing Git Hooks[/bold]")
+        hook_type = "none"
+        if config_data["commit_message_enabled"] and config_data["doc_generation_enabled"]:
+            hook_type = "both"
+        elif config_data["commit_message_enabled"]:
+            hook_type = "message"
+        elif config_data["doc_generation_enabled"]:
+            hook_type = "docs"
+        
+        if hook_type != "none":
+            ctx.invoke(install_hook, hook_type=hook_type, force=force)
+
+        # Prompt to set up alias
+        if config_data["commit_message_enabled"] and click.confirm("\nWould you like to set up a git alias for easier commits?"):
+            ctx.invoke(set_alias)
+        else:
+            console.print("\nTo generate a commit message, you can run:")
+            console.print("[bold cyan]git diff --cached | commitlm generate --short-message[/bold cyan]")
+            console.print("\nYou can set up an alias for this command later by running:")
+            console.print("[bold cyan]commitlm set-alias[/bold cyan]")
+
     except Exception as e:
         console.print(f"[red]❌ Failed to save configuration: {e}[/red]")
         sys.exit(1)
 
+def _prompt_for_task_model(default_provider: str) -> dict:
+    """Helper to prompt for task-specific model config."""
+    console.print("") # for spacing
+    provider = click.prompt(
+        "    Provider for this task",
+        type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
+        default=default_provider,
+    )
+    model = click.prompt(f"    Model for this task")
+    return {"provider": provider, "model": model}
 
 def _init_huggingface(config_data: dict, model: Optional[str]):
     """Initialize HuggingFace configuration."""
@@ -311,6 +358,9 @@ def status(ctx: click.Context):
     help="Override LLM provider for this generation",
 )
 @click.option("--model", type=str, help="Override LLM model for this generation")
+@click.option(
+    "--short-message", is_flag=True, help="Generate a short commit message", hidden=True
+)
 @click.pass_context
 def generate(
     ctx: click.Context,
@@ -319,8 +369,9 @@ def generate(
     output: Optional[str],
     provider: Optional[str],
     model: Optional[str],
+    short_message: bool,
 ):
-    """Generate documentation from git diff content."""
+    """Generate documentation or a short commit message from git diff content."""
     settings = ctx.obj["settings"]
 
     if file_path:
@@ -328,6 +379,21 @@ def generate(
             diff_content = f.read()
     elif not diff_content and not sys.stdin.isatty():
         diff_content = sys.stdin.read()
+
+    # If diff_content is an empty string (from stdin), treat it as no content.
+    if diff_content is not None and not diff_content.strip():
+        diff_content = None
+
+    if not diff_content:
+        import subprocess
+        result = subprocess.run(["git", "diff", "--cached", "--quiet"])
+        if result.returncode == 0:
+            console.print("[yellow]⚠️ No changes added to commit (git add ...)[/yellow]")
+            sys.exit(1)
+        else:
+            # If there are staged changes, get the diff and proceed
+            diff_proc = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True)
+            diff_content = diff_proc.stdout
 
     if not diff_content:
         console.print(
@@ -348,12 +414,20 @@ def generate(
                 settings_dict["model"] = model
             runtime_settings = Settings(**settings_dict)
 
+        if short_message:
+            client = create_llm_client(runtime_settings, task="commit_message")
+            # When generating a short message for the hook, just print the raw text
+            message = client.generate_short_message(diff_content)
+            print(message)
+            sys.exit(0)
+        else:
+            client = create_llm_client(runtime_settings, task="doc_generation")
+
         console.print(
             f"[blue]Using provider: {runtime_settings.provider}, model: {runtime_settings.model}[/blue]"
         )
 
         with console.status("[bold green]Generating documentation..."):
-            client = create_llm_client(runtime_settings)
             documentation = client.generate_documentation(diff_content)
 
         if output:
@@ -369,9 +443,10 @@ def generate(
             )
 
     except Exception as e:
-        console.print(f"[red]Failed to generate documentation: {e}[/red]")
+        err_console = Console(file=sys.stderr)
+        err_console.print(f"[red]Failed to generate documentation: {e}[/red]")
         if ctx.obj["debug"]:
-            console.print_exception()
+            err_console.print_exception()
         sys.exit(1)
 
 
@@ -433,150 +508,239 @@ def config_set(ctx: click.Context, key: str, value: str):
     settings.save_to_file(ctx.obj["config_path"])
     console.print(f"[green]Set '{key}' to '{converted_value}'[/green]")
 
+@config.command("change-model")
+@click.argument("task", type=click.Choice(["commit_message", "doc_generation", "default"]))
+@click.pass_context
+def change_model(ctx: click.Context, task: str):
+    """Change the model for a specific task."""
+    settings = ctx.obj["settings"]
+    
+    if task == "default":
+        provider = click.prompt(
+            "Select LLM provider",
+            type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
+            default=settings.provider,
+        )
+        model = click.prompt("Enter the model name", default=settings.model)
+        settings.provider = provider
+        settings.model = model
+    else:
+        task_settings = getattr(settings, task, None)
+        if not task_settings:
+            task_settings = TaskSettings()
+            setattr(settings, task, task_settings)
+            
+        default_provider = task_settings.provider if task_settings.provider else settings.provider
+        default_model = task_settings.model if task_settings.model else settings.model
+        
+        provider = click.prompt(
+            f"Select LLM provider for {task}",
+            type=click.Choice(["huggingface", "gemini", "anthropic", "openai"]),
+            default=default_provider,
+        )
+        model = click.prompt(f"Enter the model name for {task}", default=default_model)
+        
+        task_settings.provider = provider
+        task_settings.model = model
+
+    settings.save_to_file(ctx.obj["config_path"])
+    console.print(f"[green]✅ Model for '{task}' updated successfully.[/green]")
+
+@main.command("enable-task")
+@click.pass_context
+def enable_task(ctx: click.Context):
+    """Enable or disable tasks and configure their models."""
+    settings = ctx.obj["settings"]
+
+    enabled_tasks = click.prompt(
+        "Which tasks do you want to enable?",
+        type=click.Choice(["commit_message", "doc_generation", "both"]),
+        default="both"
+    )
+    settings.commit_message_enabled = enabled_tasks in ["commit_message", "both"]
+    settings.doc_generation_enabled = enabled_tasks in ["doc_generation", "both"]
+
+    if click.confirm("\nDo you want to use different models for the enabled tasks?", default=False):
+        if settings.commit_message_enabled and click.confirm("  - Configure a specific model for commit message generation?", default=True):
+            task_config = _prompt_for_task_model(settings.provider)
+            settings.commit_message = TaskSettings(**task_config)
+
+        if settings.doc_generation_enabled and click.confirm("  - Configure a specific model for documentation generation?", default=True):
+            task_config = _prompt_for_task_model(settings.provider)
+            settings.doc_generation = TaskSettings(**task_config)
+    else:
+        # Reset task-specific models if user chooses not to use them
+        settings.commit_message = None
+        settings.doc_generation = None
+
+    settings.save_to_file(ctx.obj["config_path"])
+    console.print("[green]✅ Tasks enabled and configured successfully.[/green]")
+
+    # Also need to reinstall hooks
+    console.print("\n[bold]Re-installing Git Hooks based on new settings...[/bold]")
+    hook_type = "none"
+    if settings.commit_message_enabled and settings.doc_generation_enabled:
+        hook_type = "both"
+    elif settings.commit_message_enabled:
+        hook_type = "message"
+    elif settings.doc_generation_enabled:
+        hook_type = "docs"
+    
+    if hook_type != "none":
+        ctx.invoke(install_hook, hook_type=hook_type, force=True)
+    else:
+        # if no tasks are enabled, we should probably uninstall all hooks
+        ctx.invoke(uninstall_hook)
+
 
 @main.command()
-@click.option("--force", is_flag=True, help="Overwrite existing hook")
+@click.argument("hook_type", type=click.Choice(["message", "docs", "both"]), default="both")
+@click.option("--force", is_flag=True, help="Overwrite existing hook(s)")
 @click.pass_context
-def install_hook(ctx: click.Context, force: bool):
-    """Install git post-commit hook for automatic documentation generation."""
+def install_hook(ctx: click.Context, hook_type: str, force: bool):
+    """Install git hooks for automation."""
     from ..integrations.git_client import get_git_client, GitClientError
     from ..utils.helpers import get_git_root
 
-    console.print("[bold blue]🔗 Installing Git Post-Commit Hook[/bold blue]")
+    console.print("[bold blue]🔗 Installing Git Hooks[/bold blue]")
     git_root = get_git_root()
-    
+
     if not git_root:
         console.print("[red]Not in a git repository![/red]")
-        console.print("Please run this command from within a git repository.")
         sys.exit(1)
 
     console.print(f"[blue]📁 Git repository detected at: {git_root}[/blue]")
-    
-    config_path = git_root / ".commitlm-config.json"
-    if not config_path.exists():
-        console.print(f"[red]No CommitLM configuration found at: {config_path}[/red]")
-        console.print("Please run 'commitlm init' first to set up configuration.")
-        console.print("[blue]💡 Tip: Run 'commitlm init' and it will automatically save the config in the right place![/blue]")
-        sys.exit(1)
-    
-    console.print(f"[green]✓ Configuration found at: {config_path}[/green]")
 
-    try:
-        # Get git client
-        git_client = get_git_client()
+    if hook_type in ["message", "both"]:
+        _install_prepare_commit_msg_hook(force)
 
-        # Check if hook already exists
-        hooks_dir = git_client.repo_path / ".git" / "hooks"
-        hook_file = hooks_dir / "post-commit"
+    if hook_type in ["docs", "both"]:
+        _install_post_commit_hook(force)
 
-        if hook_file.exists() and not force:
-            if not click.confirm(
-                f"Post-commit hook already exists at {hook_file}. Overwrite?"
-            ):
-                console.print("[yellow]Installation cancelled.[/yellow]")
-                return
-
-        # Create temporary hook script
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".sh", delete=False
-        ) as tmp_file:
-            hook_script_path = Path(tmp_file.name)
-
-        # Generate the hook script
-        if git_client.create_post_commit_hook_script(hook_script_path):
-            # Install the hook
-            if git_client.install_post_commit_hook(hook_script_path):
-                console.print(
-                    "[green]✅ Post-commit hook installed successfully![/green]"
-                )
-                console.print(f"Location: {hook_file}")
-
-                # Show what happens next
-                console.print("\n[bold]What happens next:[/bold]")
-                console.print(
-                    "• Every time you make a git commit, documentation will be automatically generated"
-                )
-                console.print(
-                    "• Documentation files will be saved in the 'docs/' directory"
-                )
-                console.print(
-                    "• Files are named with commit hash and timestamp for easy identification"
-                )
-
-                console.print("\n[bold]Example workflow:[/bold]")
-                console.print("1. Make code changes")
-                console.print(
-                    "2. Run: git add . && git commit -m 'Your commit message'"
-                )
-                console.print(
-                    "3. AI docs will automatically generate documentation in docs/"
-                )
-            else:
-                console.print("[red]❌ Failed to install post-commit hook[/red]")
-                sys.exit(1)
+def _install_prepare_commit_msg_hook(force: bool):
+    """Install the prepare-commit-msg hook."""
+    from ..integrations.git_client import get_git_client, GitClientError
+    git_client = get_git_client()
+    hooks_dir = git_client.repo_path / ".git" / "hooks"
+    hook_file = hooks_dir / "prepare-commit-msg"
+    if hook_file.exists() and not force:
+        if not click.confirm(f"Hook already exists at {hook_file}. Overwrite?"):
+            console.print("[yellow]Installation cancelled.[/yellow]")
+            return
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp_file:
+        hook_script_path = Path(tmp_file.name)
+    if git_client.create_prepare_commit_msg_hook_script(hook_script_path):
+        if git_client.install_prepare_commit_msg_hook(hook_script_path):
+            console.print(f"[green]✅ prepare-commit-msg hook installed successfully![/green]")
         else:
-            console.print("[red]❌ Failed to create hook script[/red]")
-            sys.exit(1)
+            console.print("[red]❌ Failed to install prepare-commit-msg hook[/red]")
+    else:
+        console.print("[red]❌ Failed to create hook script[/red]")
+    hook_script_path.unlink(missing_ok=True)
 
-        # Clean up temporary file
-        hook_script_path.unlink(missing_ok=True)
-
-    except GitClientError as e:
-        console.print(f"[red]❌ Git error: {e}[/red]")
-        sys.exit(1)
-    except Exception as e:
-        console.print(f"[red]❌ Unexpected error: {e}[/red]")
-        if ctx.obj["debug"]:
-            console.print_exception()
-        sys.exit(1)
+def _install_post_commit_hook(force: bool):
+    """Install the post-commit hook."""
+    from ..integrations.git_client import get_git_client, GitClientError
+    git_client = get_git_client()
+    hooks_dir = git_client.repo_path / ".git" / "hooks"
+    hook_file = hooks_dir / "post-commit"
+    if hook_file.exists() and not force:
+        if not click.confirm(f"Hook already exists at {hook_file}. Overwrite?"):
+            console.print("[yellow]Installation cancelled.[/yellow]")
+            return
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp_file:
+        hook_script_path = Path(tmp_file.name)
+    if git_client.create_post_commit_hook_script(hook_script_path):
+        if git_client.install_post_commit_hook(hook_script_path):
+            console.print(f"[green]✅ post-commit hook installed successfully![/green]")
+        else:
+            console.print("[red]❌ Failed to install post-commit hook[/red]")
+    else:
+        console.print("[red]❌ Failed to create hook script[/red]")
+    hook_script_path.unlink(missing_ok=True)
 
 
 @main.command()
 @click.pass_context
 def uninstall_hook(ctx: click.Context):
-    """Uninstall git post-commit hook."""
+    """Uninstall git hooks."""
     from ..utils.helpers import get_git_root
 
-    console.print("[bold blue]🗑️ Uninstalling Git Post-Commit Hook[/bold blue]")
+    console.print("[bold blue]🗑️ Uninstalling Git Hooks[/bold blue]")
 
-    # Check if we're in a git repository
     git_root = get_git_root()
     if not git_root:
         console.print("[red]❌ Not in a git repository![/red]")
         sys.exit(1)
-    
+
     console.print(f"[blue]📁 Git repository detected at: {git_root}[/blue]")
 
+    _uninstall_hook_file("post-commit", "CommitLM Generator Post-Commit Hook", git_root, ctx.obj.get("debug", False))
+    _uninstall_hook_file("prepare-commit-msg", "CommitLM-prepare-commit-msg", git_root, ctx.obj.get("debug", False))
+
+
+def _uninstall_hook_file(hook_name: str, signature: str, git_root: Path, debug: bool):
+    """Helper function to uninstall a single git hook."""
     try:
-        hook_file = git_root / ".git" / "hooks" / "post-commit"
+        hook_file = git_root / ".git" / "hooks" / hook_name
 
         if not hook_file.exists():
-            console.print("[yellow]⚠️  No post-commit hook found[/yellow]")
+            console.print(f"[yellow]⚠️  No {hook_name} hook found[/yellow]")
             return
 
-        # Check if it's our hook (look for AI Docs signature)
         with open(hook_file, "r") as f:
             content = f.read()
 
-        if "CommitLM Generator Post-Commit Hook" not in content:
+        if signature not in content:
             console.print(
-                "[yellow]⚠️  Existing post-commit hook doesn't appear to be from CommitLM[/yellow]"
+                f"[yellow]⚠️  Existing {hook_name} hook doesn't appear to be from CommitLM[/yellow]"
             )
             if not click.confirm("Remove it anyway?"):
-                console.print("[yellow]Uninstall cancelled.[/yellow]")
+                console.print(f"[yellow]Uninstall of {hook_name} cancelled.[/yellow]")
                 return
 
-        # Remove the hook
         hook_file.unlink()
-        console.print("[green]✅ Post-commit hook removed successfully![/green]")
+        console.print(f"[green]✅ {hook_name} hook removed successfully![/green]")
 
     except Exception as e:
-        console.print(f"[red]❌ Failed to uninstall hook: {e}[/red]")
-        if ctx.obj["debug"]:
+        console.print(f"[red]❌ Failed to uninstall {hook_name} hook: {e}[/red]")
+        if debug:
             console.print_exception()
         sys.exit(1)
+
+
+@main.command()
+@click.pass_context
+def set_alias(ctx: click.Context):
+    """Set a git alias for easy commit message generation."""
+    console.print("[bold blue]Setting up git alias[/bold blue]")
+
+    try:
+        from git import Repo, GitCommandError
+        import os
+        repo = Repo(os.getcwd(), search_parent_directories=True)
+    except (GitCommandError, ImportError):
+        console.print("[red]Not in a git repository or gitpython not installed.[/red]")
+        sys.exit(1)
+
+    def is_alias_taken(name):
+        return repo.config_reader().has_option("alias", name)
+
+    alias_name = click.prompt("Enter a name for the git alias", default="c")
+
+    if is_alias_taken(alias_name):
+        if not click.confirm(f"Alias '{alias_name}' is already taken. Overwrite?"):
+            console.print("[yellow]Alias setup cancelled.[/yellow]")
+            return
+
+    alias_command = "!git diff --cached | commitlm generate --short-message | git commit -F -"
+    with repo.config_writer(config_level='global') as cw:
+        cw.set_value("alias", alias_name, alias_command)
+
+    console.print(f"[green]✅ Alias '{alias_name}' set successfully.[/green]")
+    console.print(f"You can now use 'git {alias_name}' to commit with a generated message.")
 
 
 if __name__ == "__main__":

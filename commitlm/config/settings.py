@@ -308,170 +308,92 @@ class GitHubConfig(BaseModel):
 
 
 class DocumentationConfig(BaseModel):
-    """Documentation generation configuration."""
+    """Configuration for documentation generation."""
 
-    output_dir: Path = Field(
-        default=Path("docs"), description="Output directory for documentation"
-    )
-    formats: list[str] = Field(
-        default_factory=lambda: ["markdown"], description="Output formats"
-    )
-    include_code_examples: bool = Field(
-        default=True, description="Include code examples in documentation"
-    )
-    max_file_size: int = Field(
-        default=1_000_000, description="Maximum file size to analyze (bytes)"
-    )
+    output_dir: str = "docs"
+    commit_url_base: str = ""
+    template: str = "default"
+    include_files: list[str] = []
+    exclude_files: list[str] = []
+
+
+class TaskSettings(BaseModel):
+    """Configuration for a specific task."""
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 
 class Settings(BaseModel):
-    """Main configuration settings."""
+    """Main configuration for the application."""
 
-    provider: LLMProvider = Field(
-        default="huggingface", description="LLM provider to use"
-    )
-    model: str = Field(
-        default="qwen2.5-coder-1.5b", description="LLM model to use"
-    )
+    provider: str = Field(..., description="The primary LLM provider.")
+    model: str = Field(..., description="The primary LLM model.")
 
-    huggingface: HuggingFaceConfig = Field(
-        default_factory=lambda: HuggingFaceConfig(model= "qwen2.5-coder-1.5b")
-    )
-    gemini: GeminiConfig = Field(default_factory=lambda: GeminiConfig())
-    anthropic: AnthropicConfig = Field(default_factory=lambda: AnthropicConfig())
-    openai: OpenAIConfig = Field(default_factory=lambda: OpenAIConfig())
+    huggingface: Optional[HuggingFaceConfig] = None
+    gemini: Optional[GeminiConfig] = None
+    anthropic: Optional[AnthropicConfig] = None
+    openai: Optional[OpenAIConfig] = None
 
-    git: GitConfig = Field(default_factory=lambda: GitConfig())
-    github: GitHubConfig = Field(default_factory=lambda: GitHubConfig())
-    documentation: DocumentationConfig = Field(
-        default_factory=lambda: DocumentationConfig()
-    )
-    fallback_to_local: bool = Field(
-        default=False, description="Fallback to local model if API fails"
-    )
+    documentation: DocumentationConfig = DocumentationConfig()
+    fallback_to_local: bool = False
 
-    debug: bool = Field(default=False, description="Enable debug mode")
-    verbose: bool = Field(default=False, description="Enable verbose output")
-    config_file: Path = Field(
-        default=Path(".commitlm-config.json"), description="Configuration file path"
-    )
+    commit_message_enabled: bool = Field(default=False, description="Enable commit message generation")
+    doc_generation_enabled: bool = Field(default=False, description="Enable documentation generation")
 
-    def model_post_init(self, _: Any) -> None:
-        """Post-initialization validation."""
-        if self.provider == "huggingface":
-            if self.huggingface.model != self.model:
-                self.huggingface.model = cast(HuggingFaceModel, self.model)
-            model_info = CPU_MODEL_CONFIGS.get(self.model, {})
-            if model_info:
-                if (
-                    hasattr(self.huggingface, "max_tokens")
-                    and self.huggingface.max_tokens == 512
-                ):
-                    self.huggingface.max_tokens = model_info.get("max_tokens", 512)
-                if (
-                    hasattr(self.huggingface, "temperature")
-                    and self.huggingface.temperature == 0.3
-                ):
-                    self.huggingface.temperature = model_info.get("temperature", 0.3)
-        elif self.provider == "gemini":
-            self.gemini.model = self.model
-        elif self.provider == "anthropic":
-            self.anthropic.model = self.model
-        elif self.provider == "openai":
-            self.openai.model = self.model
+    commit_message: Optional[TaskSettings] = None
+    doc_generation: Optional[TaskSettings] = None
 
     def get_active_llm_config(
-        self,
-    ) -> Union[HuggingFaceConfig, GeminiConfig, AnthropicConfig, OpenAIConfig]:
-        """Get the configuration for the active LLM provider."""
-        return getattr(self, self.provider)
+        self, task: Optional[str] = None
+    ) -> Union[HuggingFaceConfig, GeminiConfig, AnthropicConfig, OpenAIConfig, None]:
+        """Get the configuration for the active LLM provider, with task-specific overrides."""
+        provider = self.provider
+        model = self.model
 
-    def get_model_info(self) -> Dict[str, Any]:
-        """Get detailed information about the selected model."""
-        if self.provider == "huggingface":
-            return CPU_MODEL_CONFIGS.get(self.model, {})
-        return {}
+        if task:
+            task_settings = getattr(self, task, None)
+            if task_settings:
+                if task_settings.provider:
+                    provider = task_settings.provider
+                if task_settings.model:
+                    model = task_settings.model
 
-    @classmethod
-    def load_from_file(cls, config_path: Path) -> "Settings":
-        """Load settings from a JSON configuration file."""
-        if not config_path.exists():
-            return cls()
+        config = getattr(self, provider, None)
+        if config:
+            config_copy = config.copy(deep=True)
+            config_copy.model = model
+            return config_copy
+        return None
 
-        try:
-            with open(config_path, "r") as f:
-                config_data = json.load(f)
-            return cls(**config_data)
-        except (json.JSONDecodeError, FileNotFoundError) as e:
-            raise ValueError(f"Invalid configuration file: {e}")
-
-    def save_to_file(self, config_path: Optional[Path] = None) -> None:
-        """Save settings to a JSON configuration file."""
-        if config_path is None:
-            config_path = self.config_file
-
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-
-        config_dict = self.model_dump(
-            exclude={
-                "openai": {"api_key"},
-                "anthropic": {"api_key"},
-                "gemini": {"api_key"},
-            }
-        )
-
-        with open(config_path, "w") as f:
-            json.dump(config_dict, f, indent=2, default=str)
-
-    @classmethod
-    def load_from_env_and_file(cls, config_path: Optional[Path] = None) -> "Settings":
-        """Load settings with priority: CLI args > config file > env vars > defaults."""
-        if config_path is None:
-            config_path = Path(".commitlm-config.json")
-
-        settings = cls.load_from_file(config_path)
-
-        env_overrides = {}
-
-        if model := os.getenv("COMMITLM_MODEL"):
-            env_overrides["model"] = model
-
-        if debug := os.getenv("COMMITLM_DEBUG"):
-            env_overrides["debug"] = debug.lower() in ("true", "1", "yes")
-
-        if verbose := os.getenv("COMMITLM_VERBOSE"):
-            env_overrides["verbose"] = verbose.lower() in ("true", "1", "yes")
-
-        if env_overrides:
-            current_dict = settings.model_dump()
-            current_dict.update(env_overrides)
-            settings = cls(**current_dict)
-
-        return settings
+    def save_to_file(self, path: Union[str, Path]):
+        """Save the current settings to a file."""
+        with open(path, "w") as f:
+            json.dump(self.model_dump(), f, indent=2)
 
 
-settings: Optional[Settings] = None
+_settings: Optional[Settings] = None
+
+
+def init_settings(config_path: Optional[Union[str, Path]] = None) -> Settings:
+    """Load settings from file or use defaults."""
+    global _settings
+    if _settings is not None:
+        return _settings
+
+    if config_path and Path(config_path).exists():
+        with open(config_path, "r") as f:
+            config_data = json.load(f)
+        _settings = Settings(**config_data)
+    else:
+        # This case should ideally be handled by the CLI, prompting for init
+        # For now, we create a default placeholder
+        _settings = Settings(provider="none", model="none")
+
+    return _settings
 
 
 def get_settings() -> Settings:
-    """Get global settings instance."""
-    global settings
-    if settings is None:
-        settings = Settings.load_from_env_and_file()
-    return settings
-
-
-def init_settings(config_path: Optional[Path] = None, **overrides) -> Settings:
-    """Initialize settings with optional overrides."""
-    global settings
-    if config_path:
-        settings = Settings.load_from_env_and_file(config_path)
-    else:
-        settings = Settings.load_from_env_and_file()
-
-    if overrides:
-        current_dict = settings.model_dump()
-        current_dict.update(overrides)
-        settings = Settings(**current_dict)
-
-    return settings
+    """Get the global settings instance."""
+    if _settings is None:
+        raise RuntimeError("Settings have not been initialized. Run 'commitlm init'.")
+    return _settings

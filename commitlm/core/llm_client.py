@@ -1,7 +1,7 @@
 """HuggingFace local model client for CPU-optimized documentation generation."""
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional, Union
 import logging
 import os
 
@@ -18,6 +18,7 @@ except ImportError:
     torch = None
 
 from google import genai
+from google.api_core import exceptions as google_exceptions
 from google.genai import types
 import anthropic
 import openai
@@ -30,10 +31,15 @@ from ..config.settings import (
     OpenAIConfig,
     CPU_MODEL_CONFIGS,
 )
-from ..config.prompts import render_documentation_prompt
-from typing import Union
+from ..config.prompts import (
+    render_documentation_prompt,
+    render_short_commit_message_prompt,
+)
+from typing import Union, Optional
 
 logger = logging.getLogger(__name__)
+
+SHORT_MESSAGE_FALLBACK = "chore: failed to generate commit message"
 
 
 class LLMClientError(Exception):
@@ -70,11 +76,20 @@ class LLMClient(ABC):
         """Generate documentation from git diff content."""
         pass
 
+    @abstractmethod
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff content."""
+        pass
+
     @property
     @abstractmethod
     def provider_name(self) -> str:
         """Return the provider name."""
         pass
+
+    def _generate_short_message_fallback(self) -> str:
+        """Simple fallback for a short commit message."""
+        return SHORT_MESSAGE_FALLBACK
 
 
 class HuggingFaceClient(LLMClient):
@@ -418,6 +433,18 @@ Documentation generation encountered an issue. Please check the model configurat
         prompt = self._build_optimized_prompt_from_template(diff_content, file_context)
         return self.generate_text(prompt, **kwargs)
 
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff using local HuggingFace model."""
+        prompt = render_short_commit_message_prompt(diff_content)
+        # Use a smaller max_tokens for commit messages
+        response = self.generate_text(prompt, max_tokens=50, **kwargs)
+
+        if response.startswith("# Code Changes"):
+            raise LLMClientError("Failed to generate commit message.")
+
+        # Clean up response to ensure it's a single line
+        return response.strip().split("\n")[0]
+
     def _build_optimized_prompt_from_template(
         self, diff_content: str, file_context: str = ""
     ) -> str:
@@ -514,6 +541,9 @@ class GeminiClient(LLMClient):
                 logger.error(f"Empty response from Gemini. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'Unknown'}")
                 return self._generate_fallback()
             return response.text
+        except google_exceptions.PermissionDenied as e:
+            logger.error(f"Gemini API key is invalid: {e}")
+            raise LLMClientError("Gemini API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
         except Exception as e:
             logger.error(f"Gemini API call failed: {e}")
             return self._generate_fallback()
@@ -529,6 +559,16 @@ class GeminiClient(LLMClient):
             max_tokens=self.config.max_tokens,
         )
         return self.generate_text(prompt, **kwargs)
+
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff using Gemini API."""
+        prompt = render_short_commit_message_prompt(diff_content)
+        response = self.generate_text(prompt, max_tokens=50, **kwargs)
+
+        if response.startswith("# Code Changes"):
+            raise LLMClientError("Failed to generate commit message.")
+
+        return response.strip().split("\n")[0]
 
     def _generate_fallback(self) -> str:
         """Simple fallback documentation."""
@@ -570,6 +610,12 @@ class AnthropicClient(LLMClient):
                 messages=[{"role": "user", "content": prompt}],
             )
             return message.content[0].text
+        except anthropic.APIStatusError as e:
+            if e.status_code == 401:
+                logger.error(f"Anthropic API key is invalid: {e}")
+                raise LLMClientError("Anthropic API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
+            logger.error(f"Anthropic API call failed: {e}")
+            return self._generate_fallback()
         except Exception as e:
             logger.error(f"Anthropic API call failed: {e}")
             return self._generate_fallback()
@@ -585,6 +631,16 @@ class AnthropicClient(LLMClient):
             max_tokens=self.config.max_tokens,
         )
         return self.generate_text(prompt, **kwargs)
+
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff using Anthropic API."""
+        prompt = render_short_commit_message_prompt(diff_content)
+        response = self.generate_text(prompt, max_tokens=50, **kwargs)
+
+        if response.startswith("# Code Changes"):
+            return self._generate_short_message_fallback()
+
+        return response.strip().split("\n")[0]
 
     def _generate_fallback(self) -> str:
         """Simple fallback documentation."""
@@ -626,6 +682,9 @@ class OpenAIClient(LLMClient):
                 temperature=self.config.temperature,
             )
             return response.choices[0].message.content or ""
+        except openai.AuthenticationError as e:
+            logger.error(f"OpenAI API key is invalid: {e}")
+            raise LLMClientError("OpenAI API key is invalid. Please run 'commitlm init' to configure a new key or update it in your .commitlm-config.json file.")
         except Exception as e:
             logger.error(f"OpenAI API call failed: {e}")
             return self._generate_fallback()
@@ -641,6 +700,16 @@ class OpenAIClient(LLMClient):
             max_tokens=self.config.max_tokens,
         )
         return self.generate_text(prompt, **kwargs)
+
+    def generate_short_message(self, diff_content: str, **kwargs) -> str:
+        """Generate a short commit message from git diff using OpenAI API."""
+        prompt = render_short_commit_message_prompt(diff_content)
+        response = self.generate_text(prompt, max_tokens=50, **kwargs)
+
+        if response.startswith("# Code Changes"):
+            return self._generate_short_message_fallback()
+
+        return response.strip().split("\n")[0]
 
     def _generate_fallback(self) -> str:
         """Simple fallback documentation."""
@@ -664,17 +733,27 @@ class LLMClientFactory:
     """Factory for creating LLM clients."""
 
     @staticmethod
-    def create_client(settings: Settings) -> LLMClient:
+    def create_client(settings: Settings, task: Optional[str] = None) -> LLMClient:
         """Create an LLM client based on the settings."""
+        active_config = settings.get_active_llm_config(task)
+        
         provider = settings.provider
+        if task:
+            task_settings = getattr(settings, task, None)
+            if task_settings and task_settings.provider:
+                provider = task_settings.provider
+
+        if not active_config:
+            raise LLMClientError(f"Configuration for provider '{provider}' not found.")
+
         if provider == "huggingface":
-            return HuggingFaceClient(settings.huggingface)
+            return HuggingFaceClient(active_config)
         elif provider == "gemini":
-            return GeminiClient(settings.gemini)
+            return GeminiClient(active_config)
         elif provider == "anthropic":
-            return AnthropicClient(settings.anthropic)
+            return AnthropicClient(active_config)
         elif provider == "openai":
-            return OpenAIClient(settings.openai)
+            return OpenAIClient(active_config)
         else:
             raise LLMClientError(f"Unsupported LLM provider: {provider}")
 
@@ -691,9 +770,9 @@ class LLMClientFactory:
         return TRANSFORMERS_AVAILABLE and model in CPU_MODEL_CONFIGS
 
 
-def create_llm_client(settings: Settings) -> LLMClient:
+def create_llm_client(settings: Settings, task: Optional[str] = None) -> LLMClient:
     """Convenience function to create an LLM client."""
-    return LLMClientFactory.create_client(settings)
+    return LLMClientFactory.create_client(settings, task)
 
 
 def get_available_models() -> List[str]:
