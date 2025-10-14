@@ -1,8 +1,34 @@
 # CommitLM — AI-powered Git Documentation & Commit Messages
 
+[![PyPI version](https://img.shields.io/pypi/v/commitlm.svg)](https://pypi.org/project/commitlm/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/commitlm.svg)](https://pypi.org/project/commitlm/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 **Automated Documentation and Commit Message Generation for Every Git Commit**
 
 CommitLM is an AI-native tool that automatically generates comprehensive documentation for your code changes and creates conventional commit messages. It integrates seamlessly with Git through hooks to analyze your changes and provide intelligent documentation and commit messages, streamlining your workflow and improving your project's maintainability.
+
+## Why CommitLM?
+
+- 🚀 **Save Time**: Eliminate manual documentation and commit message writing
+- 📝 **Maintain Quality**: Consistent, professional documentation for every commit
+- 🤖 **Flexible AI**: Choose from multiple LLM providers or run models locally
+- ⚡ **Zero Friction**: Works automatically via Git hooks - no workflow changes needed
+- 🔒 **Privacy First**: Run local models for complete data privacy
+- 💰 **Cost Effective**: Free local models or affordable cloud APIs
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [System Requirements](#system-requirements)
+- [Configuration](#configuration)
+- [Hardware Support](#hardware-support-local-models)
+- [Usage Examples](#usage-examples)
+- [Commands](#commands)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
 
@@ -123,6 +149,42 @@ git c  # Stages, generates message, commits in one step
 # docs/commit_abc1234_2025-01-15_14-30-25.md
 ```
 
+**Example Generated Commit Message:**
+```
+feat(auth): add OAuth2 authentication support
+
+Implemented OAuth2 authentication flow with support for Google and GitHub providers.
+Added token refresh mechanism and secure session management.
+```
+
+**Example Generated Documentation:**
+```markdown
+# Commit Documentation
+
+## Summary
+Added OAuth2 authentication support with Google and GitHub providers, implementing
+secure token management and session handling.
+
+## Changes Made
+- Implemented OAuth2 authentication flow
+- Added GoogleAuthProvider and GitHubAuthProvider classes
+- Created TokenRefreshService for automatic token renewal
+- Added secure session storage with encryption
+
+## Technical Impact
+- New dependencies: oauth2-client, jose
+- Database migration required for user_tokens table
+- Environment variables needed: GOOGLE_CLIENT_ID, GITHUB_CLIENT_ID
+
+## Usage Example
+\`\`\`python
+from auth import OAuth2Manager
+
+manager = OAuth2Manager(provider='google')
+auth_url = manager.get_authorization_url()
+\`\`\`
+```
+
 #### Alternative: Git Alias Workflow
 
 Set up a convenient git alias for one-command commits:
@@ -168,6 +230,11 @@ export GEMINI_API_KEY="your-gemini-api-key"
 export ANTHROPIC_API_KEY="your-anthropic-api-key"
 export OPENAI_API_KEY="your-openai-api-key"
 ```
+
+**Where to get API keys:**
+- **Gemini**: [Google AI Studio](https://makersuite.google.com/app/apikey) - Free tier available
+- **Anthropic**: [Anthropic Console](https://console.anthropic.com/) - Pay-as-you-go pricing
+- **OpenAI**: [OpenAI Platform](https://platform.openai.com/api-keys) - Pay-as-you-go pricing
 
 ### Task-Specific Models
 
@@ -397,3 +464,95 @@ commitlm status
 # Force CPU usage if GPU causes issues
 # Edit .commitlm-config.json and set "device": "cpu"
 ```
+
+### Git Hook Conflicts
+If you have existing `prepare-commit-msg` or `post-commit` hooks:
+```bash
+# Backup existing hooks
+cp .git/hooks/prepare-commit-msg .git/hooks/prepare-commit-msg.backup
+cp .git/hooks/post-commit .git/hooks/post-commit.backup
+
+# Install CommitLM hooks
+commitlm install-hook
+
+# Manually merge if needed by editing .git/hooks/prepare-commit-msg or .git/hooks/post-commit
+```
+
+### Configuration Not Found
+```bash
+# Ensure you're in a git repository
+git status
+
+# Reinitialize configuration
+commitlm init
+```
+
+## Contributing
+
+We welcome contributions! Here's how you can help:
+
+### Reporting Issues
+- Check [existing issues](https://github.com/LeeSinLiang/commitLM/issues) first
+- Provide clear reproduction steps
+- Include system info from `commitlm status`
+
+### Feature Requests
+- Open an issue with the `enhancement` label
+- Describe the use case and expected behavior
+
+### Development Setup
+```bash
+# Clone the repository
+git clone https://github.com/LeeSinLiang/commitLM.git
+cd commitLM
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install in editable mode with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run linting
+black commitlm/
+ruff check commitlm/
+```
+
+### Pull Requests
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass (`pytest`)
+6. Run linters (`black .` and `ruff check .`)
+7. Commit your changes (use CommitLM for commit messages!)
+8. Push to your fork
+9. Open a Pull Request
+
+## License
+
+CommitLM is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for full details.
+
+### Key Points
+- ✅ Free for commercial and personal use
+- ✅ Modify and distribute freely
+- ✅ Patent protection included
+- ℹ️ Must include copyright notice and license in distributions
+- ℹ️ Must state significant changes made to the code
+
+See [NOTICE](NOTICE) file for third-party attributions.
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/LeeSinLiang/commitLM/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/LeeSinLiang/commitLM/discussions)
+- **PyPI**: [https://pypi.org/project/commitlm/](https://pypi.org/project/commitlm/)
+
+---
+
+**Made with ❤️ by [Sin Liang Lee](https://github.com/LeeSinLiang)**
+
+*If CommitLM saves you time, consider giving it a ⭐ on GitHub!*
