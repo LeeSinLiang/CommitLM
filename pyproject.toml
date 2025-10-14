@@ -4,17 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "commitlm"
-version = "1.0.6"
+version = "1.0.8"
 readme = {file = "README.md", content-type = "text/markdown"}
 description = "AI-powered Git Documentation & Commit Messages"
 authors = [{name = "Sin Liang Lee", email = "sinlianglee110@gmail.com"}]
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 requires-python = ">=3.9"
 keywords = ["git", "commit", "documentation", "ai", "llm", "automation", "developer-tools"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
