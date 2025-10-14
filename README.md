@@ -535,14 +535,6 @@ ruff check commitlm/
 ## License
 
 CommitLM is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for full details.
-
-### Key Points
-- ✅ Free for commercial and personal use
-- ✅ Modify and distribute freely
-- ✅ Patent protection included
-- ℹ️ Must include copyright notice and license in distributions
-- ℹ️ Must state significant changes made to the code
-
 See [NOTICE](NOTICE) file for third-party attributions.
 
 ## Support
@@ -552,7 +544,5 @@ See [NOTICE](NOTICE) file for third-party attributions.
 - **PyPI**: [https://pypi.org/project/commitlm/](https://pypi.org/project/commitlm/)
 
 ---
-
-**Made with ❤️ by [Sin Liang Lee](https://github.com/LeeSinLiang)**
 
 *If CommitLM saves you time, consider giving it a ⭐ on GitHub!*
