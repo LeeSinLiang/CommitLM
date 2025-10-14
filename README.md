@@ -1,4 +1,4 @@
-# CommitLM — AI-Native Git Documentation & Commit Messages
+# CommitLM — AI-powered Git Documentation & Commit Messages
 
 **Automated Documentation and Commit Message Generation for Every Git Commit**
 

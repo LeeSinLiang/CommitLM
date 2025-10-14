@@ -1,6 +1,5 @@
 # Core Git and GitHub integration
 gitpython
-pygithub
 
 # HuggingFace local models
 transformers>=4.35.0
@@ -23,6 +22,7 @@ jinja2
 
 # LLM Providers
 google-genai
+google-api-core
 anthropic
 openai
 
