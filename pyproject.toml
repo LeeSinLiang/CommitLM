@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "commitlm"
-version = "1.0.8"
+version = "1.0.9"
 readme = {file = "README.md", content-type = "text/markdown"}
 description = "AI-powered Git Documentation & Commit Messages"
 authors = [{name = "Sin Liang Lee", email = "sinlianglee110@gmail.com"}]
