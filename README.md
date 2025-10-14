@@ -25,14 +25,12 @@ CommitLM is an AI-native tool that automatically generates comprehensive documen
 
 ## Quick Start
 
-### 1. Clone and Install
+### 1. Install
 
 ```bash
-git clone <repository-url>
-cd commitlm
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e .
+pip install commitlm
 ```
 
 ### 2. Initialize Configuration
