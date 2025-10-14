@@ -28,8 +28,6 @@ CommitLM is an AI-native tool that automatically generates comprehensive documen
 ### 1. Install
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install commitlm
 ```
 
