@@ -545,6 +545,4 @@ See [NOTICE](NOTICE) file for third-party attributions.
 
 ---
 
-**Made with ❤️ by [Sin Liang Lee](https://github.com/LeeSinLiang)**
-
 *If CommitLM saves you time, consider giving it a ⭐ on GitHub!*
