@@ -1,6 +1,6 @@
 name: "Standard Issue"
 description: "Feature, bug, docs, or tooling request for CommitLM"
-title: "[{type}] <short title>"
+title: ""
 labels:
   - triage
 body:
