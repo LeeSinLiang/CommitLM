@@ -1,4 +1,4 @@
-# CommitLM — AI-powered Git Documentation & Commit Messages
+# CommitLM — Git Companion That Teaches Your AI What Just Happened. 
 
 [![PyPI version](https://img.shields.io/pypi/v/commitlm.svg)](https://pypi.org/project/commitlm/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/commitlm.svg)](https://pypi.org/project/commitlm/)
@@ -6,16 +6,27 @@
 
 **Automated Documentation and Commit Message Generation for Every Git Commit**
 
-CommitLM is an AI-native tool that automatically generates comprehensive documentation for your code changes and creates conventional commit messages. It integrates seamlessly with Git through hooks to analyze your changes and provide intelligent documentation and commit messages, streamlining your workflow and improving your project's maintainability.
+AI coding agents are powerful but stateless—they lack context on why a change was made. This leads to guesswork and bugs.
+
+While most "AI commit" tools stop at the message, CommitLM is an AI-native git tool that creates a tiny, structured docs per commit. This acts as a **briefing for LLM coding agents** (like Copilot, Gemini CLI, Claude, etc.), so they can:
+
+* ✅ Pick up exactly where you or another agent left off.  
+* 🧠 Respect constraints and project-specific nuances.  
+* 🔄 Update callers, tests, and migrations with fewer misses.
+
+```bash
+pip install commitlm
+commitlm init
+```
 
 ## Why CommitLM?
 
-- 🚀 **Save Time**: Eliminate manual documentation and commit message writing
-- 📝 **Maintain Quality**: Consistent, professional documentation for every commit
-- 🤖 **Flexible AI**: Choose from multiple LLM providers or run models locally
+- 🚀 **Rapid Documentation for AI Agents**: Eliminate manual documentation and commit message writing, while ensuring your AI agents pick up where you left off.
 - ⚡ **Zero Friction**: Works automatically via Git hooks - no workflow changes needed
+- 📝 **Memory-savvy & long-context**: 8-bit quantization and YaRN for extended context lengths
+- 🤖 **Flexible AI**: Choose from multiple LLM providers or run models locally
+- 📝 **Create a Living Knowledge Base**: Your repo becomes a self-updating source of truth, making onboarding and handoffs seamless for both humans and AI. 
 - 🔒 **Privacy First**: Run local models for complete data privacy
-- 💰 **Cost Effective**: Free local models or affordable cloud APIs
 
 ## Table of Contents
 
@@ -49,73 +60,25 @@ CommitLM is an AI-native tool that automatically generates comprehensive documen
 - **💾 Memory Optimization**: Toggleable 8-bit quantization for systems with limited RAM
 - **🎯 Extended Context**: YaRN support for Qwen models (up to 131K tokens)
 
-## Quick Start
-
-### 1. Install
-
-```bash
-pip install commitlm
-```
-
-### 2. Initialize Configuration
-
-```bash
-# Interactive setup (recommended) - guides you through provider, model, and task selection
-commitlm init
-
-# Setup with specific provider and model
-commitlm init --provider gemini --model gemini-2.0-flash-exp
-commitlm init --provider anthropic --model claude-3-5-haiku-latest
-commitlm init --provider openai --model gpt-4o-mini
-commitlm init --provider huggingface --model qwen2.5-coder-1.5b
-```
-
-#### Interactive Setup Flow
-
-When you run `commitlm init`, you'll be guided through:
-
-1. **Provider Selection**: Choose between local (HuggingFace) or cloud (Gemini, Anthropic, OpenAI)
-2. **Model Selection**: Pick from provider-specific models
-3. **Task Configuration**: Enable commit messages, documentation, or both
-4. **Task-Specific Models** (optional): Use different models for different tasks
-5. **Fallback Configuration**: Set up fallback to local models if API fails
-
-Example interactive session:
-```
-? Select LLM provider › gemini
-? Select model › gemini-2.0-flash-exp
-? Which tasks do you want to enable? › both
-? Do you want to use different models for specific tasks? › Yes
-  ? Select provider for commit_message › huggingface
-  ? Select model › qwen2.5-coder-1.5b
-? Enable fallback to a local model if the API fails? › Yes
-```
-
 #### Provider Options
 
-**Local Models (HuggingFace)** - No API keys required:
+**Local Models (HuggingFace)** - No API keys required, Privacy-first:
 - `qwen2.5-coder-1.5b` - **Recommended** - Best performance/speed ratio, YaRN support (1.5B params)
 - `phi-3-mini-128k` - Long context (128K tokens), excellent for large diffs (3.8B params)
 - `tinyllama` - Minimal resource usage (1.1B params)
 
 **Cloud APIs** - Faster, more capable:
-- **Gemini**: `gemini-2.0-flash-exp`, `gemini-1.5-pro`, `gemini-1.5-flash` (requires `GEMINI_API_KEY`)
-- **Anthropic**: `claude-3-5-sonnet-latest`, `claude-3-5-haiku-latest` (requires `ANTHROPIC_API_KEY`)
-- **OpenAI**: `gpt-4o`, `gpt-4o-mini` (requires `OPENAI_API_KEY`)
+- **Gemini**
+- **Anthropic**
+- **OpenAI**
 
-### 3. Install Git Hooks
+### Git Hooks Installation (if not done during init)
 
-CommitLM provides two powerful git hooks:
+CommitLM provides two powerful git hooks: automatic commit message generation and automatic documentation generation.
 
 ```bash
-# Install both hooks (recommended)
+# Interactive setup
 commitlm install-hook
-
-# Install only commit message generation
-commitlm install-hook message
-
-# Install only documentation generation
-commitlm install-hook docs
 ```
 
 **What each hook does**:
@@ -130,75 +93,30 @@ commitlm install-hook docs
 1. Runs after commit completes
 2. Extracts commit diff
 3. Generates comprehensive documentation
-4. Saves to `docs/commit_<hash>_<timestamp>.md`
+4. Saves to `docs/commit_<commit message>.md`
 
 Example workflow:
 ```bash
 # Make your code changes
 git add .
 
-# Option 1: Use hook to generate message
-git commit
-# Editor opens with AI-generated message pre-filled
-# Edit if needed, save and close
-
-# Option 2: Use git alias (see below)
-git c  # Stages, generates message, commits in one step
+# Git alias (see below)
+git c  # generates commit message, commits, and generate post commit documentation
 
 # Documentation is automatically generated after commit completes
-# docs/commit_abc1234_2025-01-15_14-30-25.md
+# docs/commit_feat:added_OAuth2_authentication_support.md
 ```
 
 **Example Generated Commit Message:**
 ```
 feat(auth): add OAuth2 authentication support
-
-Implemented OAuth2 authentication flow with support for Google and GitHub providers.
-Added token refresh mechanism and secure session management.
 ```
 
 **Example Generated Documentation:**
-```markdown
-# Commit Documentation
 
-## Summary
-Added OAuth2 authentication support with Google and GitHub providers, implementing
-secure token management and session handling.
+Refer to the [docs](docs/) folder for samples.
 
-## Changes Made
-- Implemented OAuth2 authentication flow
-- Added GoogleAuthProvider and GitHubAuthProvider classes
-- Created TokenRefreshService for automatic token renewal
-- Added secure session storage with encryption
-
-## Technical Impact
-- New dependencies: oauth2-client, jose
-- Database migration required for user_tokens table
-- Environment variables needed: GOOGLE_CLIENT_ID, GITHUB_CLIENT_ID
-
-## Usage Example
-\`\`\`python
-from auth import OAuth2Manager
-
-manager = OAuth2Manager(provider='google')
-auth_url = manager.get_authorization_url()
-\`\`\`
-```
-
-#### Alternative: Git Alias Workflow
-
-Set up a convenient git alias for one-command commits:
-
-```bash
-commitlm set-alias
-# Creates 'git c' alias (or custom name)
-
-# Now use it:
-git add .
-git c  # Automatically generates message and commits
-```
-
-### 4. Validate Setup
+### Validate Setup
 
 ```bash
 # View configuration and hardware info
@@ -207,55 +125,14 @@ commitlm status
 
 ## System Requirements
 
-### Minimum Requirements
-- Python 3.9+
-- 4GB RAM (with memory optimization enabled)
-- 2GB disk space (for model downloads)
-
-### Recommended Requirements  
+### Recommended Requirements (for local models)
 - Python 3.10+
 - 8GB+ RAM
-- NVIDIA GPU with 4GB+ VRAM (optional, auto-detected)
-- SSD storage
+- NVIDIA GPU with 4GB+ VRAM (optional, auto-detected) / Apple Silicon (MPS)
 
 ## Configuration
 
-### Environment Variables
-
-Set API keys for cloud providers:
-
-```bash
-# In your shell profile (~/.bashrc, ~/.zshrc, etc.)
-export GEMINI_API_KEY="your-gemini-api-key"
-export ANTHROPIC_API_KEY="your-anthropic-api-key"
-export OPENAI_API_KEY="your-openai-api-key"
-```
-
-**Where to get API keys:**
-- **Gemini**: [Google AI Studio](https://makersuite.google.com/app/apikey) - Free tier available
-- **Anthropic**: [Anthropic Console](https://console.anthropic.com/) - Pay-as-you-go pricing
-- **OpenAI**: [OpenAI Platform](https://platform.openai.com/api-keys) - Pay-as-you-go pricing
-
-### Task-Specific Models
-
-Use different models for different tasks:
-
-```bash
-# Enable task-specific models during init
-commitlm init
-# Select "Yes" when prompted "Do you want to use different models for specific tasks?"
-
-# Or configure later
-commitlm enable-task
-
-# Change model for specific task
-commitlm config change-model commit_message
-commitlm config change-model doc_generation
-```
-
-**Example use case**: Use fast local model (Qwen) for commit messages, powerful cloud API (Claude) for documentation.
-
-### Configuration File
+### Default Configuration File
 
 Configuration is stored in `.commitlm-config.json` at your git repository root:
 
@@ -271,11 +148,40 @@ Configuration is stored in `.commitlm-config.json` at your git repository root:
   },
   "doc_generation": {
     "provider": "gemini",
-    "model": "gemini-1.5-pro"
+    "model": "gemini-2.5-pro"
   },
   "fallback_to_local": true
 }
 ```
+
+
+### If you prefer environment variables:
+
+Set API keys for cloud providers:
+
+```bash
+# In your shell profile (~/.bashrc, ~/.zshrc, etc.)
+export GEMINI_API_KEY="your-gemini-api-key"
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+export OPENAI_API_KEY="your-openai-api-key"
+```
+### Task-Specific Models
+
+Use different models for different tasks:
+
+```bash
+# Enable task-specific models during init
+commitlm init
+
+# Or configure later
+commitlm enable-task
+
+# Change model for specific task
+commitlm config change-model commit_message
+commitlm config change-model doc_generation
+```
+
+**Example use case**: Use lightweight model (gemini-2.5-flash-lite) for commit messages, powerful model (gemini-2.5-pro) for documentation.
 
 ## Hardware Support (Local Models)
 
@@ -283,7 +189,7 @@ When using HuggingFace local models, the tool automatically detects and uses the
 
 1. **NVIDIA GPU** (CUDA) - Uses GPU acceleration with `device_map="auto"`
 2. **Apple Silicon** (MPS) - Uses Apple's Metal Performance Shaders
-3. **CPU** - Falls back to optimized CPU inference
+3. **CPU** - Falls back to optimized CPU inference (not recommended)
 
 ### Memory Optimization
 
@@ -298,22 +204,6 @@ commitlm init --provider huggingface --no-memory-optimization
 ```
 
 ## Usage Examples
-
-### Using Commit Message Hook
-
-```bash
-# Make changes
-echo "def new_feature(): pass" >> src/app.py
-git add .
-
-# Commit without message - hook generates it
-git commit
-# Editor opens with pre-filled message:
-# feat(app): add new feature function
-
-# Review, edit if needed, save and close
-```
-
 ### Using Git Alias
 
 ```bash
@@ -322,7 +212,7 @@ commitlm set-alias
 
 # Use it for every commit
 git add .
-git c  # Generates message and commits automatically
+git c  # generates commit message, commits, and generates post-commit documentation
 ```
 
 ### Using Documentation Hook
@@ -331,12 +221,11 @@ After installing the `post-commit` hook:
 
 ```bash
 # Make changes
-echo "console.log('new feature')" >> src/app.js
 git add .
-git commit -m "feat: add logging feature"
+git commit -m "feat: add logging feature" # or use 'git c' for auto message
 
 # Documentation automatically generated at:
-# docs/commit_a1b2c3d_2025-01-15_14-30-25.md
+# docs/commit_feat:implemented_logging_feature.md
 ```
 
 ### Manual Generation (Testing/Debugging)
@@ -489,53 +378,13 @@ commitlm init
 
 ## Contributing
 
-We welcome contributions! Here's how you can help:
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) to get started.
 
-### Reporting Issues
-- Check [existing issues](https://github.com/LeeSinLiang/commitLM/issues) first
-- Provide clear reproduction steps
-- Include system info from `commitlm status`
-
-### Feature Requests
-- Open an issue with the `enhancement` label
-- Describe the use case and expected behavior
-
-### Development Setup
-```bash
-# Clone the repository
-git clone https://github.com/LeeSinLiang/commitLM.git
-cd commitLM
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in editable mode with dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Run linting
-black commitlm/
-ruff check commitlm/
-```
-
-### Pull Requests
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass (`pytest`)
-6. Run linters (`black .` and `ruff check .`)
-7. Commit your changes (use CommitLM for commit messages!)
-8. Push to your fork
-9. Open a Pull Request
+Before contributing, please also read our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-CommitLM is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for full details.
-See [NOTICE](NOTICE) file for third-party attributions.
+CommitLM is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for full details, and [NOTICE](NOTICE) file for third-party attributions.
 
 ## Support
 
