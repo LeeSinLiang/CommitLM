@@ -1,0 +1,81 @@
+name: "Standard Issue"
+description: "Feature, bug, docs, or tooling request for CommitLM"
+title: ""
+labels:
+  - triage
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - feature
+        - enhancement
+        - bug
+        - documentation
+        - tooling
+        - performance
+        - ci
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Area(s)
+      options:
+        - label: CLI
+        - label: Git hooks
+        - label: Providers
+        - label: Config
+        - label: Docs
+        - label: CI
+        - label: Windows
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the change/problem.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why do we want this? User story, pain points, or goals.
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the approach, interfaces/flags, and any alternatives.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What’s in scope vs out of scope for this issue?
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks
+      description: Checklist of steps
+      value: |
+        - [ ] ...
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Conditions that must be true to consider this complete
+      value: |
+        - [ ] ...
+  - type: textarea
+    id: testplan
+    attributes:
+      label: Test plan
+      description: Manual steps and/or automated tests to validate the change
+  - type: input
+    id: related
+    attributes:
+      label: Related issues/PRs
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Willing to submit a PR?
+      options:
+        - label: Yes, I’d like to work on this!
