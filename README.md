@@ -378,48 +378,9 @@ commitlm init
 
 ## Contributing
 
-We welcome contributions! Here's how you can help:
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) to get started.
 
-### Reporting Issues
-- Check [existing issues](https://github.com/LeeSinLiang/commitLM/issues) first
-- Provide clear reproduction steps
-- Include system info from `commitlm status`
-
-### Feature Requests
-- Open an issue with the `enhancement` label
-- Describe the use case and expected behavior
-
-### Development Setup
-```bash
-# Clone the repository
-git clone https://github.com/LeeSinLiang/commitLM.git
-cd commitLM
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in editable mode with dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Run linting
-black commitlm/
-ruff check commitlm/
-```
-
-### Pull Requests
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass (`pytest`)
-6. Run linters (`black .` and `ruff check .`)
-7. Commit your changes (use CommitLM for commit messages!)
-8. Push to your fork
-9. Open a Pull Request
+Before contributing, please also read our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
