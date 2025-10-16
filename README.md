@@ -8,7 +8,7 @@
 
 AI coding agents are powerful but stateless—they lack context on why a change was made. This leads to guesswork and bugs.
 
-Furthermore, most "AI commit" tools stop at the message. CommitLM goes a step further by creating a tiny, structured doc per commit. This acts as a **briefing for LLM coding agents** (like Copilot, Gemini CLI, Claude, etc.), so they can:
+While most "AI commit" tools stop at the message, CommitLM is an AI-native git tool that creates a tiny, structured docs per commit. This acts as a **briefing for LLM coding agents** (like Copilot, Gemini CLI, Claude, etc.), so they can:
 
 * ✅ Pick up exactly where you or another agent left off.  
 * 🧠 Respect constraints and project-specific nuances.  
@@ -384,8 +384,7 @@ Before contributing, please also read our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-CommitLM is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for full details.
-See [NOTICE](NOTICE) file for third-party attributions.
+CommitLM is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for full details, and [NOTICE](NOTICE) file for third-party attributions.
 
 ## Support
 
