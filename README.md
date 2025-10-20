@@ -1,4 +1,4 @@
-# CommitLM — Git AI Companion That Explains What You Commit
+# CommitLM — Git AI Companion That Teaches AI and Your Team What Just Happened
 
 [![PyPI version](https://img.shields.io/pypi/v/commitlm.svg)](https://pypi.org/project/commitlm/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/commitlm.svg)](https://pypi.org/project/commitlm/)
